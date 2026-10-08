@@ -214,3 +214,9 @@ kept. Contributions are accepted under the same license.
 
 The harness code is MIT; the Ocular AI conversation datasets it downloads from Hugging Face carry their own
 terms, stated on each dataset card. Model outputs and scores you generate belong to you.
+
+## Contact
+
+Questions about the benchmark, a model you would like on the board, or the Hi-Fi conversational datasets:
+[research@useocular.com](mailto:research@useocular.com). Bugs and contributions to the harness are welcome as
+GitHub issues and pull requests.
