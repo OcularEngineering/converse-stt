@@ -1,6 +1,9 @@
 # Ocular AI Evals Research
 
-Ocular AI's own evaluation harness for the [Converse-STT](https://www.useocular.com/converse/stt) board.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+Ocular AI's open-source evaluation harness for the [Converse-STT](https://www.useocular.com/converse/stt)
+board, released under the [MIT License](LICENSE).
 It transcribes each speaker track of an Ocular AI full-duplex conversation with a speech-to-text model and
 reports **word error rate (WER)** and **character error rate (CER)**. Diarization metrics come later.
 
@@ -143,3 +146,12 @@ reports/          generated HTML (gitignored)
 uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
+
+## License
+
+Copyright (c) 2026 Ocular AI. This project is released under the [MIT License](LICENSE); you are free to
+use, modify and redistribute it, including commercially, as long as the copyright and permission notice are
+kept. Contributions are accepted under the same license.
+
+The harness code is MIT; the Ocular AI conversation datasets it downloads from Hugging Face carry their own
+terms, stated on each dataset card. Model outputs and scores you generate belong to you.

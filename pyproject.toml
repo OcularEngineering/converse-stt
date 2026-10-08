@@ -9,8 +9,14 @@ description = "Ocular AI Converse-STT harness: transcribe Ocular AI conversation
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
+license-files = ["LICENSE"]
 authors = [{ name = "Ocular AI" }]
 keywords = ["asr", "speech-to-text", "benchmark", "wer", "cer", "converse-stt"]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
 dependencies = [
   "httpx>=0.28,<1",
   "huggingface-hub>=1.0,<2",
@@ -27,6 +33,10 @@ local = [
   "faster-whisper==1.2.1",
   "tokenizers==0.23.2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/OcularEngineering/converse-set"
+Leaderboard = "https://www.useocular.com/converse/stt"
 
 [project.scripts]
 ocular-evals = "ocular_evals.cli:main"
