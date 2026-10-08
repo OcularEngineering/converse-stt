@@ -1,11 +1,45 @@
-# Ocular AI Evals Research
+# Converse-STT 2.0
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Ocular AI's open-source evaluation harness for the [Converse-STT](https://www.useocular.com/converse/stt)
-board, released under the [MIT License](LICENSE).
-It transcribes each speaker track of an Ocular AI full-duplex conversation with a speech-to-text model and
-reports **word error rate (WER)** and **character error rate (CER)**.
+Ocular AI's open-source evaluation harness for **Converse-STT**, the speech-to-text benchmark in the
+[Ocular AI Converse](https://www.useocular.com/converse/stt) family, released under the
+[MIT License](LICENSE). It transcribes each speaker track of an Ocular AI full-duplex conversation with a
+speech-to-text model and reports **word error rate (WER)** and **character error rate (CER)**.
+
+This repository is Converse-STT **2.0**. The first edition was scored in collaboration with Cekura; 2.0 is
+run independently by Ocular AI, and every number on the board is produced by the code in this repository,
+so anyone can reproduce a score or add a model.
+
+## About the benchmark
+
+**Converse** is Ocular AI's family of benchmarks for AI on real-world, two-person conversation. **Converse-STT**,
+the Conversational Speech-to-Text Benchmark, measures how accurately frontier speech-to-text models transcribe
+real, unscripted American English conversations between two people. A lower word error rate is a more
+accurate transcript.
+
+**The recordings.** Ocular AI's Hi-Fi conversational dataset: four American English conversations of about
+15 minutes each, roughly 60 minutes of speech across eight speaker tracks. Each speaker is recorded on a
+separate microphone at 48 kHz and delivered as 24-bit mono FLAC with verbatim, time-aligned transcripts. The
+recordings keep the pauses, fillers, repetitions and false starts of ordinary talk. A public sample with
+recordings and reference transcripts is on Hugging Face; it is a sample of a larger collection that Ocular AI
+licenses.
+
+**The score.** Word error rate: incorrect, missing and extra words divided by the number of words in the
+reference. Breath and laughter tags are removed before scoring, so a model is not penalized for leaving them
+out. This harness reports character error rate alongside it and keeps every normalized reference and
+hypothesis so a score can be read, not just quoted.
+
+**Converse-STT 1.0 (with Cekura).** The first edition scored 15 speech-to-text models on the Hi-Fi
+conversations and on public Pipecat audio. Twelve of the 15 had a higher error rate on the conversational
+recordings, four more than doubled, and the leading model changed with the dataset: the model that led Pipecat
+at 1.93% ranked ninth on the conversations at 4.23%, while the conversational leader scored 2.93%. Those
+figures are kept in `src/ocular_evals/boards/converse-stt.json` and can be shown next to 2.0 runs with
+`report --board converse-stt`. Full write-up: [useocular.com/converse/stt](https://www.useocular.com/converse/stt).
+
+**Converse-STT 2.0 (this repository).** Independent of any evaluation partner. Ocular AI runs every model
+through this harness on the same Hi-Fi conversations, publishes the harness, the model configurations and the
+dataset manifest, and adds models as they are released.
 
 The design borrows from the public research harnesses we compare against (separate channel per speaker,
 summed edit counts, Whisper-style text normalization) but the implementation is independent and much
@@ -95,7 +129,7 @@ drops an entry (its `runs/<name>` directory is kept). Names in `models.toml` sha
 5. **Report.** `report` renders a self-contained HTML leaderboard from every scored run in `runs/`
    (or the `--run` directories you name), toggles between WER and CER, and shows reference and hypothesis
    side by side for every track. A repeated short segment is flagged because it usually means the decoder
-   looped. Pass `--board converse-stt` to also show the published Converse-STT figures next to the runs.
+   looped. Pass `--board converse-stt` to also show the Converse-STT 1.0 figures next to the 2.0 runs.
 
 ## Model configs
 
@@ -139,7 +173,7 @@ src/ocular_evals/
   runner.py       resumable transcription + scoring of a run directory
   report.py       leaderboard HTML
   models/         built-in model configs
-  boards/         published Converse-STT board used by the report
+  boards/         Converse-STT 1.0 figures, shown by the report on request (--board)
   templates/      leaderboard.html
 tests/            pytest, no network
 data/             datasets (gitignored)
@@ -169,6 +203,8 @@ uv run ruff check . && uv run ruff format --check .
   rank on more than error rate.
 - **Published board sync.** Push verified harness results straight to the public
   [Converse-STT](https://www.useocular.com/converse/stt) leaderboard.
+- **More of the Converse family.** Reuse the dataset manifest and report for further Converse benchmarks
+  as they are announced, so the family shares one harness.
 
 ## License
 

@@ -1,7 +1,7 @@
 {
-  "name": "Converse-STT",
-  "label": "October 2026 board",
-  "updated": "October 2026",
+  "name": "Converse-STT 1.0",
+  "label": "Converse-STT 1.0 (with Cekura)",
+  "updated": "September 2026",
   "source": "https://www.useocular.com/converse/stt",
   "metric": "wer",
   "models": [

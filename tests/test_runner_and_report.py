@@ -183,7 +183,7 @@ def test_report_payload_and_html(dataset, tmp_path):
     transcribe_dataset(dataset, CONFIG, output, provider=FakeProvider(CONFIG), log=lambda _: None)
     score_run(output, dataset=dataset)
     board = load_board("converse-stt")
-    assert board["models"][0]["rank"] == 1 and board["updated"] == "October 2026"
+    assert board["models"][0]["rank"] == 1 and board["updated"] == "September 2026"
     assert load_board(None)["models"] == []
 
     payload = build_payload([output], board=board)

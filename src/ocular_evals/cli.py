@@ -374,7 +374,7 @@ def cmd_compare(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ocular-evals",
-        description="Ocular AI Converse-STT harness: transcribe Ocular AI conversations and score WER / CER.",
+        description="Ocular AI Converse-STT 2.0 harness: transcribe Ocular AI conversations and score WER / CER.",
     )
     parser.add_argument("--version", action="version", version=f"ocular-evals {__version__}")
     parser.add_argument("--env-file", type=Path, default=Path(".env"), help="dotenv file to load (default: ./.env)")
@@ -482,7 +482,8 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument(
         "--board",
         default=None,
-        help="also show a published board next to the runs: built-in name (converse-stt) or JSON path. Off by default.",
+        help="also show a published board next to the runs: built-in name (converse-stt = the 1.0 figures) "
+        "or a JSON path. Off by default.",
     )
     report.add_argument("--label", default="This sample", help="label for harness rows")
     report.set_defaults(func=cmd_report)

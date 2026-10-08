@@ -1,4 +1,4 @@
-# Models the Ocular AI Converse-STT harness runs. One table per model.
+# Models the Ocular AI Converse-STT 2.0 harness runs. One table per model.
 # Minimum for an OpenAI-compatible endpoint: url + key (the NAME of the variable in .env).
 # Optional: model (defaults to the table name), vendor, display_name, href, notes, provider,
 # and provider options such as upload = "mp3" or response_format = "text".

@@ -5,7 +5,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Converse-STT · Score review</title>
+  <title>Converse-STT 2.0 · Ocular AI Converse</title>
   <style>
     :root {
       --bg: #fafaf8;
@@ -107,7 +107,7 @@
   <header>
     <div class="wrap">
       <p class="eyebrow">Ocular AI Converse</p>
-      <h1>Converse-STT</h1>
+      <h1>Converse-STT 2.0</h1>
       <p class="lede" id="lede"></p>
       <div class="stats" id="stats"></div>
     </div>
@@ -117,7 +117,7 @@
       <section>
         <div class="toolbar">
           <div class="views" role="group" aria-label="What to rank">
-            <button class="pill" type="button" id="view-board" aria-pressed="true">Published board</button>
+            <button class="pill" type="button" id="view-board" aria-pressed="true">1.0 board + 2.0 runs</button>
             <button class="pill" type="button" id="view-run" aria-pressed="false">This sample</button>
             <select class="ghost" id="run-picker" hidden aria-label="Harness model"></select>
           </div>
@@ -290,10 +290,10 @@
       if (selected.kind === "published") {
         const pipecat = selected.pipecatRank !== undefined ? `, rank ${String(selected.pipecatRank).padStart(2, "0")} on Pipecat` : "";
         panel.innerHTML = `
-          <p class="eyebrow">Published score</p>
+          <p class="eyebrow">${escapeHtml(DATA.board.label || "Published score")}</p>
           <h2>${escapeHtml(selected.name)}</h2>
           <p class="meta">${escapeHtml(selected.vendor)} · rank ${String(selected.rank).padStart(2, "0")} on the Hi-Fi conversations${pipecat}.</p>
-          <p>This row is the ${escapeHtml(DATA.board.updated || "published")} Converse-STT figure. The harness has not rerun it, so there is no per-conversation breakdown or CER here.</p>
+          <p>This row is the ${escapeHtml(DATA.board.updated || "published")} ${escapeHtml(DATA.board.name || "Converse-STT")} figure. The 2.0 harness has not rerun it, so there is no per-conversation breakdown or CER here.</p>
           ${selected.href ? `<p><a href="${escapeAttr(selected.href)}">Model site</a></p>` : ""}`;
         return;
       }
@@ -324,8 +324,8 @@
 
     function renderStats() {
       const lede = HAS_BOARD
-        ? `Word and character error rate on the Ocular AI Hi-Fi conversations. A lower score is a more accurate transcript. ${DATA.board.label || "Published"} figures sit beside harness runs from ${DATA.generated}.`
-        : `Word and character error rate on the Ocular AI Hi-Fi conversations. A lower score is a more accurate transcript. Every row is a harness run; page built ${DATA.generated}.`;
+        ? `How accurately speech-to-text models transcribe real two-person American English conversations. Word and character error rate on the Ocular AI Hi-Fi recordings; a lower score is a more accurate transcript. ${DATA.board.label || "Published"} figures sit beside 2.0 harness runs from ${DATA.generated}.`
+        : `How accurately speech-to-text models transcribe real two-person American English conversations. Word and character error rate on the Ocular AI Hi-Fi recordings; a lower score is a more accurate transcript. Every row is an independent 2.0 harness run; page built ${DATA.generated}.`;
       document.getElementById("lede").textContent = lede;
       const complete = DATA.runs.filter((run) => run.tracks === run.tracksTotal && run.wer !== null);
       const best = [...complete].sort((a, b) => a.wer - b.wer)[0];

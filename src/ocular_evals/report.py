@@ -1,7 +1,7 @@
-"""Build the Converse-STT review page from one or more scored runs.
+"""Build the Converse-STT 2.0 review page from one or more scored runs.
 
 The page is a single self-contained HTML file. It ranks the harness runs
-next to the published board and lets you open every conversation to read
+(optionally next to the Converse-STT 1.0 board) and lets you open every conversation to read
 the normalized reference beside the model's transcript.
 """
 
@@ -24,7 +24,7 @@ REPEAT_THRESHOLD = 8
 
 def empty_board() -> dict[str, Any]:
     """The default: no published rows, only harness runs."""
-    return {"name": "Converse-STT", "label": "", "updated": "", "source": "", "metric": "wer", "models": []}
+    return {"name": "Converse-STT 2.0", "label": "", "updated": "", "source": "", "metric": "wer", "models": []}
 
 
 def discover_runs(runs_dir: Path) -> list[Path]:
