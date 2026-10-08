@@ -1,4 +1,4 @@
-# Ocular Evals Research
+# Ocular AI Evals Research
 
 Ocular's own evaluation harness for the [Converse-STT](https://www.useocular.com/converse/stt) board.
 It transcribes each speaker track of an Ocular full-duplex conversation with a speech-to-text model and
