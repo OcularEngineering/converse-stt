@@ -219,7 +219,7 @@ class Registry:
 
     def render(self) -> str:
         header = (
-            "# Models the Ocular Converse-STT harness runs. One table per model.\n"
+            "# Models the Ocular AI Converse-STT harness runs. One table per model.\n"
             "# Minimum for an OpenAI-compatible endpoint: url + key (the NAME of the variable in .env).\n"
             "# Optional: model (defaults to the table name), vendor, display_name, href, notes, provider,\n"
             '# and provider options such as upload = "mp3" or response_format = "text".\n'

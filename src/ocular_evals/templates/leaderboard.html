@@ -104,7 +104,7 @@
 <body>
   <header>
     <div class="wrap">
-      <p class="eyebrow">Ocular Converse</p>
+      <p class="eyebrow">Ocular AI Converse</p>
       <h1>Converse-STT</h1>
       <p class="lede" id="lede"></p>
       <div class="stats" id="stats"></div>
@@ -322,8 +322,8 @@
 
     function renderStats() {
       const lede = HAS_BOARD
-        ? `Word and character error rate on the Ocular Hi-Fi conversations. A lower score is a more accurate transcript. ${DATA.board.label || "Published"} figures sit beside harness runs from ${DATA.generated}.`
-        : `Word and character error rate on the Ocular Hi-Fi conversations. A lower score is a more accurate transcript. Every row is a harness run; page built ${DATA.generated}.`;
+        ? `Word and character error rate on the Ocular AI Hi-Fi conversations. A lower score is a more accurate transcript. ${DATA.board.label || "Published"} figures sit beside harness runs from ${DATA.generated}.`
+        : `Word and character error rate on the Ocular AI Hi-Fi conversations. A lower score is a more accurate transcript. Every row is a harness run; page built ${DATA.generated}.`;
       document.getElementById("lede").textContent = lede;
       const complete = DATA.runs.filter((run) => run.tracks === run.tracksTotal && run.wer !== null);
       const best = [...complete].sort((a, b) => a.wer - b.wer)[0];

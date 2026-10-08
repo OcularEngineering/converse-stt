@@ -1,6 +1,6 @@
-"""Materialize Ocular conversations into a local, self-describing dataset folder.
+"""Materialize Ocular AI conversations into a local, self-describing dataset folder.
 
-Ocular publishes full-duplex two-speaker conversations as a Hugging Face
+Ocular AI publishes full-duplex two-speaker conversations as a Hugging Face
 AudioFolder: ``train/metadata.jsonl`` holds one row per speaker track and each
 row's ``file_name`` points at a FLAC file next to it. Every FLAC is one
 speaker's own microphone for the whole conversation, so a session is two
@@ -437,7 +437,7 @@ def pull_dataset(
     revision: str = DEFAULT_REVISION,
     token: str | None = None,
 ) -> Dataset:
-    """Download an Ocular AudioFolder dataset from the Hugging Face Hub and build it at ``output``."""
+    """Download an Ocular AI AudioFolder dataset from the Hugging Face Hub and build it at ``output``."""
     from huggingface_hub import hf_hub_download
     from huggingface_hub.errors import EntryNotFoundError
 

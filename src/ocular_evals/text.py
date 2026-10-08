@@ -3,7 +3,7 @@
 Two profiles are available:
 
 ``whisper``
-    Strip Ocular transcript markup, then apply the OpenAI Whisper text
+    Strip Ocular AI transcript markup, then apply the OpenAI Whisper text
     normalizer (English rules for English, the basic Unicode rules otherwise),
     then drop any token without a letter or digit. This is the profile used
     for the numbers on the Converse-STT board and matches the public research
@@ -24,7 +24,7 @@ from functools import lru_cache
 PROFILES: tuple[str, ...] = ("whisper", "plain")
 DEFAULT_PROFILE = "whisper"
 
-# Ocular transcripts annotate non-speech with SGML style tags such as
+# Ocular AI transcripts annotate non-speech with SGML style tags such as
 # ``<breath/>``, ``<laugh>...</laugh>``, ``<spn/>`` and ``<unclear/>``.
 _TAG = re.compile(r"</?[^<>]{0,120}>")
 _BRACKET = re.compile(r"\[[^\[\]]{0,120}\]")

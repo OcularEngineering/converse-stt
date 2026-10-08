@@ -374,7 +374,7 @@ def cmd_compare(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ocular-evals",
-        description="Ocular Converse-STT harness: transcribe Ocular conversations and score WER / CER.",
+        description="Ocular AI Converse-STT harness: transcribe Ocular AI conversations and score WER / CER.",
     )
     parser.add_argument("--version", action="version", version=f"ocular-evals {__version__}")
     parser.add_argument("--env-file", type=Path, default=Path(".env"), help="dotenv file to load (default: ./.env)")
@@ -392,7 +392,7 @@ def build_parser() -> argparse.ArgumentParser:
     dataset = sub.add_parser("dataset", help="download, build, inspect or verify a dataset").add_subparsers(
         dest="dataset_command", required=True
     )
-    pull = dataset.add_parser("pull", help="download an Ocular dataset from Hugging Face")
+    pull = dataset.add_parser("pull", help="download an Ocular AI dataset from Hugging Face")
     from ocular_evals.dataset import DEFAULT_REPO_ID, DEFAULT_REVISION
 
     pull.add_argument("--repo", default=DEFAULT_REPO_ID)

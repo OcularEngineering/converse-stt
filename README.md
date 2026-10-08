@@ -1,7 +1,7 @@
 # Ocular AI Evals Research
 
-Ocular's own evaluation harness for the [Converse-STT](https://www.useocular.com/converse/stt) board.
-It transcribes each speaker track of an Ocular full-duplex conversation with a speech-to-text model and
+Ocular AI's own evaluation harness for the [Converse-STT](https://www.useocular.com/converse/stt) board.
+It transcribes each speaker track of an Ocular AI full-duplex conversation with a speech-to-text model and
 reports **word error rate (WER)** and **character error rate (CER)**. Diarization metrics come later.
 
 The design borrows from the public research harnesses we compare against (separate channel per speaker,
@@ -74,7 +74,7 @@ drops an entry (its `runs/<name>` directory is kept). Names in `models.toml` sha
    A run directory is locked while a run is in progress, so starting the same model twice refuses instead of
    interleaving two transcriptions. Transient errors (429/5xx/timeouts) are retried with backoff; a 429 that
    reports exhausted credits or quota is reported once and not retried.
-3. **Normalization.** Reference and hypothesis go through the same `whisper` profile: Ocular markup such as
+3. **Normalization.** Reference and hypothesis go through the same `whisper` profile: Ocular AI markup such as
    `<breath/>`, `<laugh>…</laugh>`, `<spn/>` and `<unclear/>` is removed, then the Whisper English text
    normalizer (contractions, numbers, spelling variants, casing), then punctuation becomes spaces. A `plain`
    profile (lowercase, strip punctuation, keep apostrophes and hyphens) is available for inspection.

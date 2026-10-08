@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "ocular-evals"
 version = "0.1.0"
-description = "Ocular Converse-STT harness: transcribe Ocular conversations with any speech-to-text model and score word and character error rate."
+description = "Ocular AI Converse-STT harness: transcribe Ocular AI conversations with any speech-to-text model and score word and character error rate."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
