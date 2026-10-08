@@ -5,7 +5,7 @@
 Ocular AI's open-source evaluation harness for the [Converse-STT](https://www.useocular.com/converse/stt)
 board, released under the [MIT License](LICENSE).
 It transcribes each speaker track of an Ocular AI full-duplex conversation with a speech-to-text model and
-reports **word error rate (WER)** and **character error rate (CER)**. Diarization metrics come later.
+reports **word error rate (WER)** and **character error rate (CER)**.
 
 The design borrows from the public research harnesses we compare against (separate channel per speaker,
 summed edit counts, Whisper-style text normalization) but the implementation is independent and much
@@ -146,6 +146,22 @@ reports/          generated HTML (gitignored)
 uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
+
+## Roadmap
+
+- **Diarization metrics.** Score who-spoke-when on the mixed two-speaker audio (DER, speaker-attributed
+  WER) alongside the per-track WER / CER reported today.
+- **More models.** Keep adding hosted and local speech-to-text models to `models.toml` so the board covers
+  every provider we are asked about; contributions of new entries are welcome.
+- **More providers.** Native adapters for APIs that do not speak the OpenAI transcription protocol
+  (streaming / WebSocket vendors, batch job APIs) beyond the current `openai-compatible`, `omi` and
+  `faster-whisper` backends.
+- **More datasets and languages.** Run the same harness over additional Ocular AI conversation sets as they
+  are published, including non-English ones.
+- **Latency and cost.** Record time-to-transcript and per-minute pricing next to accuracy so the board can
+  rank on more than error rate.
+- **Published board sync.** Push verified harness results straight to the public
+  [Converse-STT](https://www.useocular.com/converse/stt) leaderboard.
 
 ## License
 
