@@ -1,0 +1,53 @@
+# Models the Ocular Converse-STT harness runs. One table per model.
+# Minimum for an OpenAI-compatible endpoint: url + key (the NAME of the variable in .env).
+# Optional: model (defaults to the table name), vendor, display_name, href, notes, provider,
+# and provider options such as upload = "mp3" or response_format = "text".
+# Add one from the shell: ocular-evals models add <name> --url <base url> --key <secret or ENV_NAME>
+
+[omi-general-1]
+url = "https://api.omi.health"      # the omi provider appends /v1/jobs itself (long-audio job API)
+key = "OMI_API_KEY"
+provider = "omi"
+vendor = "Omi"
+display_name = "Omi General"
+href = "https://docs.omi.health/"
+
+[omi-medical-1]
+url = "https://api.omi.health"
+key = "OMI_API_KEY"
+provider = "omi"
+vendor = "Omi"
+display_name = "Omi Medical"
+href = "https://docs.omi.health/"
+
+[gpt-transcribe]
+url = "https://api.openai.com/v1"
+key = "OPENAI_API_KEY"
+vendor = "OpenAI"
+display_name = "GPT Transcribe"
+href = "https://platform.openai.com/docs/guides/speech-to-text"
+upload = "mp3"
+
+[gpt-4o-mini-transcribe]
+url = "https://api.openai.com/v1"
+key = "OPENAI_API_KEY"
+vendor = "OpenAI"
+display_name = "GPT-4o mini Transcribe"
+href = "https://platform.openai.com/docs/guides/speech-to-text"
+upload = "mp3"
+
+[whisper-large-v3]
+provider = "faster-whisper"
+model = "Systran/faster-whisper-large-v3"
+vendor = "OpenAI"
+display_name = "Whisper Large v3"
+href = "https://github.com/SYSTRAN/faster-whisper"
+notes = "Local CTranslate2 Whisper; needs `uv sync --extra local`."
+
+[whisper-large-v3.options]
+beam_size = 5
+temperature = 0.0
+condition_on_previous_text = false
+vad_filter = true
+compute_type = "default"
+device = "auto"

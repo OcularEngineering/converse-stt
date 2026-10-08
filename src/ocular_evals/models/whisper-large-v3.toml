@@ -1,0 +1,16 @@
+name = "whisper-large-v3"
+display_name = "Whisper Large v3"
+vendor = "OpenAI"
+provider = "faster-whisper"
+model = "Systran/faster-whisper-large-v3"
+env = []
+href = "https://github.com/SYSTRAN/faster-whisper"
+notes = "Long conversations loop when each 30 s window is conditioned on the previous text, so conditioning is off and VAD skips silence."
+
+[options]
+beam_size = 5
+temperature = 0.0
+condition_on_previous_text = false
+vad_filter = true
+compute_type = "default"
+device = "auto"

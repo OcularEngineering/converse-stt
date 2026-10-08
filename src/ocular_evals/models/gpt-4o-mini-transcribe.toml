@@ -1,0 +1,12 @@
+name = "gpt-4o-mini-transcribe"
+display_name = "GPT-4o mini Transcribe"
+vendor = "OpenAI"
+provider = "openai-compatible"
+model = "gpt-4o-mini-transcribe"
+env = ["OPENAI_API_KEY"]
+href = "https://platform.openai.com/docs/guides/speech-to-text"
+notes = "OpenAI caps uploads at 25 MB; 15-minute FLAC tracks exceed that, so audio is re-encoded to 64 kbps mono MP3 (requires ffmpeg)."
+
+[options]
+response_format = "json"
+upload = "mp3"

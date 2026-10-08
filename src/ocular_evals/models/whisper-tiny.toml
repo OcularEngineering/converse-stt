@@ -1,0 +1,16 @@
+name = "whisper-tiny"
+display_name = "Whisper Tiny (smoke test)"
+vendor = "OpenAI"
+provider = "faster-whisper"
+model = "tiny"
+env = []
+href = "https://github.com/SYSTRAN/faster-whisper"
+notes = "Smallest Whisper checkpoint on CPU with int8 weights; use it to check the pipeline end to end, not for scores."
+
+[options]
+beam_size = 5
+temperature = 0.0
+condition_on_previous_text = false
+vad_filter = true
+compute_type = "int8"
+device = "cpu"

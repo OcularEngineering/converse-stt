@@ -1,0 +1,11 @@
+name = "omi-medical-1"
+display_name = "Omi Medical"
+vendor = "Omi"
+provider = "omi"
+model = "omi-medical-1"
+env = ["OMI_API_KEY"]
+href = "https://docs.omi.health/"
+notes = "Long-audio job API: create job, upload to presigned storage, complete, then long-poll until the result is ready."
+
+[options]
+response_format = "json"
