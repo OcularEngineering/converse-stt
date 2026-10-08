@@ -35,7 +35,7 @@ local = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/OcularEngineering/converse-set"
+Homepage = "https://github.com/OcularEngineering/converse-stt"
 Leaderboard = "https://www.useocular.com/converse/stt"
 
 [project.scripts]
