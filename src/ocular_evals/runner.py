@@ -32,7 +32,7 @@ from typing import Any
 
 from ocular_evals import __version__
 from ocular_evals.config import ModelConfig
-from ocular_evals.dataset import Conversation, Dataset, Track, load_dataset, read_jsonl
+from ocular_evals.dataset import Conversation, Dataset, Track, load_dataset, read_jsonl, sha256_file
 from ocular_evals.env import redact
 from ocular_evals.metrics import EditCounts, percent, primary_metric, score_text
 from ocular_evals.providers import Provider, ProviderError, create_provider
@@ -235,7 +235,15 @@ def _transcribe_locked(
             log(f"{label} transcribing {audio.name} ({track.duration_s:.0f}s) with {config.name}")
             started = time.perf_counter()
             try:
+                actual = sha256_file(audio) if audio.is_file() else None
+                if actual != track.sha256:
+                    raise RunError(
+                        f"{audio} does not match the manifest (sha256 {actual or 'missing'} != {track.sha256}); "
+                        "the dataset is damaged or stale. Run `ocular-evals dataset verify` and `dataset pull`."
+                    )
                 hypothesis = provider.transcribe(audio, language=conversation.language)
+            except RunError as exc:
+                failure = {"retryable": False, "status": None, "error": redact(str(exc))}
             except ProviderError as exc:
                 failure = {"retryable": exc.retryable, "status": exc.status, "error": redact(str(exc))}
             except Exception as exc:  # noqa: BLE001 - we want every failure on disk

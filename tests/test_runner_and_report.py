@@ -208,6 +208,21 @@ def test_report_payload_and_html(dataset, tmp_path):
     assert '"published": []' in html and "Reson8" not in html
 
 
+def test_damaged_audio_is_never_sent_to_the_provider(dataset, tmp_path):
+    damaged = dataset.root / "audio" / "s2" / "ch1.flac"
+    damaged.write_bytes(b"not the audio in the manifest")
+    provider = FakeProvider(CONFIG)
+    output = tmp_path / "run"
+
+    counts = transcribe_dataset(dataset, CONFIG, output, provider=provider, log=lambda _: None)
+
+    assert counts == {"transcribed": 3, "skipped": 0, "failed": 1, "selected": 4}
+    assert ("s2", "ch1") not in provider.calls
+    failure = read_jsonl(output / "failures.jsonl")[0]
+    assert failure["track"] == "ch1" and "does not match the manifest" in failure["error"]
+    assert failure["retryable"] is False
+
+
 def test_concurrent_runs_on_one_directory_are_refused(dataset, tmp_path):
     import subprocess
     import sys
