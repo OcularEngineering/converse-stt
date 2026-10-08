@@ -425,14 +425,14 @@ def build_parser() -> argparse.ArgumentParser:
             "out of your shell history."
         ),
     )
-    add.add_argument("name", help="short id, e.g. deepgram-nova-3 (also the default model id and run directory)")
+    add.add_argument("name", help="short id, e.g. gpt-4o-mini-transcribe (also the default model id and run dir)")
     add.add_argument("--url", help="API base URL, e.g. https://api.vendor.com/v1 (/audio/transcriptions is implied)")
     add.add_argument("--key", help="the API key, or the NAME of the .env variable holding it, or '-' for stdin")
     add.add_argument("--key-env", help="variable name to store a literal --key under (default: <VENDOR>_API_KEY)")
     add.add_argument("--model", help="model id sent to the API when it differs from the name")
     add.add_argument("--provider", choices=("openai-compatible", "omi", "faster-whisper"), default=None)
-    add.add_argument("--vendor", help="shown on the leaderboard, e.g. Deepgram")
-    add.add_argument("--display-name", help="shown on the leaderboard, e.g. 'Deepgram Nova-3'")
+    add.add_argument("--vendor", help="shown on the leaderboard, e.g. OpenAI")
+    add.add_argument("--display-name", help="shown on the leaderboard, e.g. 'GPT-4o mini Transcribe'")
     add.add_argument("--href", help="link for the leaderboard row")
     add.add_argument("--notes")
     add.add_argument(

@@ -3,9 +3,9 @@
 One file lists every model the harness runs. Adding a hosted model that speaks
 the OpenAI ``/audio/transcriptions`` protocol takes two lines::
 
-    [deepgram-nova-3]
-    url = "https://api.deepgram.com/v1"
-    key = "DEEPGRAM_API_KEY"          # name of the variable in .env
+    [gpt-4o-mini-transcribe]
+    url = "https://api.openai.com/v1"
+    key = "OPENAI_API_KEY"            # name of the variable in .env
 
 Everything else is optional: ``model`` (defaults to the table name), ``vendor``,
 ``display_name``, ``href``, ``notes``, ``provider`` (defaults to
@@ -71,7 +71,7 @@ def _entry_to_config_dict(name: str, entry: dict[str, Any], *, source: str) -> d
         if not _ENV_NAME.match(key):
             raise ConfigError(
                 f"{source}: [{name}] key must be the NAME of an environment variable (for example "
-                f"DEEPGRAM_API_KEY), not the secret itself. Put the secret in .env."
+                f"OPENAI_API_KEY), not the secret itself. Put the secret in .env."
             )
         env = list(data.get("env") or [])
         if key not in env:
@@ -245,7 +245,7 @@ class Registry:
 
 
 def suggest_env_name(name: str) -> str:
-    """``deepgram-nova-3`` -> ``DEEPGRAM_API_KEY`` (first word), so one vendor shares one key."""
+    """``<vendor>-<model>`` -> ``<VENDOR>_API_KEY``: the first word of the name, so one vendor shares one key."""
     head = re.split(r"[^a-z0-9]+", name.lower().strip())[0] or "model"
     return f"{head.upper()}_API_KEY"
 

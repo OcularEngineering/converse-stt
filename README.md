@@ -17,12 +17,12 @@ smaller: one package, one manifest format, one command.
 cd "Ocular Evals Research"
 uv sync --group dev              # hosted providers only
 uv sync --group dev --extra local  # also installs faster-whisper for local Whisper runs
-cp .env.example .env             # add HF_TOKEN / OMI_API_KEY / OPENAI_API_KEY
+cp .env.example .env             # add HF_TOKEN and the provider keys you need, e.g. OPENAI_API_KEY
 
-uv run ocular-evals dataset pull                 # Ocular English sample from Hugging Face -> data/converse-en-sample
+uv run ocular-evals dataset pull                 # Ocular AI English sample from Hugging Face -> data/converse-en-sample
 uv run ocular-evals dataset show
 uv run ocular-evals check                        # credentials + dependencies for every model in models.toml
-uv run ocular-evals run --model omi-general-1    # transcribe + score -> runs/omi-general-1
+uv run ocular-evals run --model gpt-4o-mini-transcribe   # transcribe + score -> runs/gpt-4o-mini-transcribe
 uv run ocular-evals report                       # every scored run in runs/ -> reports/converse-stt.html
 open reports/converse-stt.html
 ```
@@ -32,33 +32,39 @@ open reports/converse-stt.html
 ## Adding a model
 
 Models live in `models.toml` at the project root. For any API that speaks the OpenAI
-`POST /audio/transcriptions` protocol (OpenAI, Deepgram, Groq, Fireworks, Mistral, self-hosted servers, …)
-a model is a URL and a key:
+`POST /audio/transcriptions` protocol (OpenAI itself, the many hosted services that mirror it, or a
+self-hosted server) a model is a URL and a key:
 
 ```bash
-uv run ocular-evals models add deepgram-nova-3 --url https://api.deepgram.com/v1 --key dg_xxxxxxxx
-#   stored the key in .env as DEEPGRAM_API_KEY
-#   added [deepgram-nova-3] to models.toml
-#   deepgram-nova-3: ready (openai-compatible:nova-3). Run it: ocular-evals run --model deepgram-nova-3
-uv run ocular-evals run --model deepgram-nova-3
+uv run ocular-evals models add <model-name> --url https://api.<provider>.com/v1 --key <your-api-key>
+#   stored the key in .env as <PROVIDER>_API_KEY
+#   added [<model-name>] to models.toml
+#   <model-name>: ready (openai-compatible:<model-name>). Run it: ocular-evals run --model <model-name>
+uv run ocular-evals run --model <model-name>
 uv run ocular-evals report
 ```
 
+For example, OpenAI's small transcription model:
+
+```bash
+uv run ocular-evals models add gpt-4o-mini-transcribe --url https://api.openai.com/v1 --key sk-... --vendor OpenAI
+```
+
 `--key` takes either the secret itself (written to `.env`, never to `models.toml`) or the NAME of a variable
-that already holds it (`--key DEEPGRAM_API_KEY`). Use `--key -` to paste the secret on stdin and keep it out of
-shell history. Useful extras: `--model nova-3` when the API model id differs from the name, `--vendor` and
-`--display-name` for the leaderboard, `--upload mp3` when the API caps uploads (OpenAI's 25 MB limit is handled
-automatically), `--provider omi|faster-whisper` for the non-OpenAI-shaped backends, `--option key=value` for
-anything else.
+that already holds it (`--key OPENAI_API_KEY`). Use `--key -` to paste the secret on stdin and keep it out of
+shell history. Useful extras: `--model <api-model-id>` when the id the API expects differs from the name,
+`--vendor` and `--display-name` for the leaderboard, `--upload mp3` when the API caps uploads (OpenAI's 25 MB
+limit is handled automatically), `--provider faster-whisper` for local Whisper or another built-in provider id
+for job-style APIs, `--option key=value` for anything else.
 
 Editing the file by hand is equally fine:
 
 ```toml
-[deepgram-nova-3]
-url = "https://api.deepgram.com/v1"      # base URL; /audio/transcriptions is implied
-key = "DEEPGRAM_API_KEY"                 # NAME of the variable in .env
-model = "nova-3"                         # optional, defaults to the table name
-vendor = "Deepgram"                      # optional, leaderboard label
+[<model-name>]
+url = "https://api.<provider>.com/v1"    # base URL; /audio/transcriptions is implied
+key = "<PROVIDER>_API_KEY"               # NAME of the variable in .env
+model = "<api-model-id>"                 # optional, defaults to the table name
+vendor = "<Provider>"                    # optional, leaderboard label
 ```
 
 `ocular-evals models` lists everything, `models show <name>` prints the resolved config, `models remove <name>`
@@ -98,22 +104,23 @@ built-in examples live in `src/ocular_evals/models/*.toml`, and any TOML file wi
 `--model path/to/file.toml`:
 
 ```toml
-name = "omi-general-1"
-display_name = "Omi General"
-vendor = "Omi"
-provider = "omi"                 # openai-compatible | omi | faster-whisper
-model = "omi-general-1"
-env = ["OMI_API_KEY"]
-href = "https://docs.omi.health/"
+name = "gpt-4o-mini-transcribe"
+display_name = "GPT-4o mini Transcribe"
+vendor = "OpenAI"
+provider = "openai-compatible"   # openai-compatible | omi | faster-whisper
+model = "gpt-4o-mini-transcribe"
+env = ["OPENAI_API_KEY"]
+href = "https://platform.openai.com/docs/guides/speech-to-text"
 
 [options]
 response_format = "json"
+upload = "mp3"                   # OpenAI caps uploads at 25 MB
 ```
 
 | provider            | what it calls                                                            | key options                                                                 |
 | ------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
 | `openai-compatible` | `POST {base_url}/audio/transcriptions` (OpenAI and any compatible server) | `base_url`, `api_key_env`, `response_format`, `upload` (`flac`/`wav16k`/`mp3`) |
-| `omi`               | Omi's async job flow for long audio                                      | `base_url`, `api_key_env`, `response_format`, `poll_wait_s`, `deadline_s`   |
+| `omi`               | asynchronous job API for long audio: create job, upload, poll for result | `base_url`, `api_key_env`, `response_format`, `poll_wait_s`, `deadline_s`   |
 | `faster-whisper`    | local CTranslate2 Whisper                                                 | `device`, `compute_type`, `beam_size`, `vad_filter`, `condition_on_previous_text` |
 
 Options never contain credentials; keys are read from the environment variables listed in `env`.
