@@ -25,6 +25,9 @@ from ocular_evals.text import DEFAULT_PROFILE, PROFILES, normalize
 DEFAULT_DATASET = Path("data/converse-en-sample")
 DEFAULT_RUNS = Path("runs")
 DEFAULT_REPORT = Path("reports/converse-stt.html")
+OPENROUTER_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_KEY_ENV = "OPENROUTER_API_KEY"
+MP3_UPLOAD_HOSTS = ("api.openai.com", "openrouter.ai")
 
 
 def _fail(message: str) -> int:
@@ -165,8 +168,22 @@ def cmd_models_add(args: argparse.Namespace) -> int:
     provider_key = args.provider or DEFAULT_PROVIDER
     if provider_key not in PROVIDERS:
         return _fail(f"unknown provider {provider_key!r}; available: {', '.join(sorted(PROVIDERS))}")
+    if args.openrouter:
+        if provider_key != "openai-compatible":
+            return _fail("--openrouter only applies to openai-compatible models")
+        if args.url:
+            return _fail("--openrouter and --url are mutually exclusive; OpenRouter's URL is implied")
+        if not args.model or "/" not in args.model:
+            return _fail("--openrouter needs the OpenRouter model id via --model, e.g. --model deepgram/nova-3")
+        args.url = OPENROUTER_URL
+        args.key = args.key or OPENROUTER_KEY_ENV
+        args.notes = args.notes or "via OpenRouter"
+        args.href = args.href or f"https://openrouter.ai/{args.model}"
     if provider_key in {"openai-compatible", "omi"} and not args.url:
-        return _fail("--url is required: the base URL of the API, for example https://api.vendor.com/v1")
+        return _fail(
+            "--url is required: the vendor's base URL, for example https://api.vendor.com/v1 "
+            "(or pass --openrouter to route through OpenRouter)"
+        )
 
     key_env: str | None = None
     secret: str | None = None
@@ -186,8 +203,8 @@ def cmd_models_add(args: argparse.Namespace) -> int:
     options = _parse_options(args.option)
     if args.upload:
         options["upload"] = args.upload
-    elif provider_key == "openai-compatible" and args.url and "api.openai.com" in args.url:
-        options["upload"] = "mp3"  # OpenAI caps uploads at 25 MB; 15-minute FLAC tracks exceed it.
+    elif provider_key == "openai-compatible" and args.url and any(host in args.url for host in MP3_UPLOAD_HOSTS):
+        options["upload"] = "mp3"  # these hosts cap multipart uploads at 25 MB; 15-minute FLAC tracks exceed it.
     if args.response_format:
         options["response_format"] = args.response_format
 
@@ -427,6 +444,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add.add_argument("name", help="short id, e.g. gpt-4o-mini-transcribe (also the default model id and run dir)")
     add.add_argument("--url", help="API base URL, e.g. https://api.vendor.com/v1 (/audio/transcriptions is implied)")
+    add.add_argument(
+        "--openrouter",
+        action="store_true",
+        help=f"route through OpenRouter ({OPENROUTER_URL}) with --model <vendor/model>; key defaults to "
+        f"{OPENROUTER_KEY_ENV}",
+    )
     add.add_argument("--key", help="the API key, or the NAME of the .env variable holding it, or '-' for stdin")
     add.add_argument("--key-env", help="variable name to store a literal --key under (default: <VENDOR>_API_KEY)")
     add.add_argument("--model", help="model id sent to the API when it differs from the name")

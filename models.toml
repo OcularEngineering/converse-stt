@@ -3,6 +3,158 @@
 # Optional: model (defaults to the table name), vendor, display_name, href, notes, provider,
 # and provider options such as upload = "mp3" or response_format = "text".
 # Add one from the shell: ocular-evals models add <name> --url <base url> --key <secret or ENV_NAME>
+#
+# Two ways to reach a hosted model:
+#   * through OpenRouter: url = "https://openrouter.ai/api/v1", key = "OPENROUTER_API_KEY" and the
+#     OpenRouter model id (vendor/model). One key covers every entry below marked "via OpenRouter".
+#   * directly: url = the vendor's own base URL and key = the NAME of that vendor's key in .env,
+#     e.g. url = "https://api.openai.com/v1", key = "OPENAI_API_KEY". Use a different table name
+#     (or `models add --replace`) to run the same model both ways.
+# Uploads go as 64 kbps mono MP3 (upload = "mp3") because hosted APIs cap multipart uploads at 25 MB.
+
+# --- via OpenRouter ----------------------------------------------------------
+
+[gpt-4o-transcribe]
+url = "https://openrouter.ai/api/v1"
+key = "OPENROUTER_API_KEY"
+model = "openai/gpt-4o-transcribe"
+vendor = "OpenAI"
+display_name = "GPT-4o Transcribe"
+href = "https://openrouter.ai/openai/gpt-4o-transcribe"
+notes = "via OpenRouter"
+upload = "mp3"
+
+[gpt-4o-mini-transcribe]
+url = "https://openrouter.ai/api/v1"
+key = "OPENROUTER_API_KEY"
+model = "openai/gpt-4o-mini-transcribe"
+vendor = "OpenAI"
+display_name = "GPT-4o mini Transcribe"
+href = "https://openrouter.ai/openai/gpt-4o-mini-transcribe"
+notes = "via OpenRouter"
+upload = "mp3"
+
+[gpt-transcribe]
+url = "https://openrouter.ai/api/v1"
+key = "OPENROUTER_API_KEY"
+model = "openai/gpt-transcribe"
+vendor = "OpenAI"
+display_name = "GPT Transcribe"
+href = "https://openrouter.ai/openai/gpt-transcribe"
+notes = "via OpenRouter"
+upload = "mp3"
+
+[deepgram-nova-3]
+url = "https://openrouter.ai/api/v1"
+key = "OPENROUTER_API_KEY"
+model = "deepgram/nova-3"
+vendor = "Deepgram"
+display_name = "Nova-3"
+href = "https://openrouter.ai/deepgram/nova-3"
+notes = "via OpenRouter"
+upload = "mp3"
+
+[assemblyai-universal-3-5-pro]
+url = "https://openrouter.ai/api/v1"
+key = "OPENROUTER_API_KEY"
+model = "assemblyai/universal-3-5-pro"
+vendor = "AssemblyAI"
+display_name = "Universal-3.5 Pro"
+href = "https://openrouter.ai/assemblyai/universal-3-5-pro"
+notes = "via OpenRouter"
+upload = "mp3"
+
+[google-chirp-3]
+url = "https://openrouter.ai/api/v1"
+key = "OPENROUTER_API_KEY"
+model = "google/chirp-3"
+vendor = "Google"
+display_name = "Chirp 3"
+href = "https://openrouter.ai/google/chirp-3"
+notes = "via OpenRouter"
+upload = "mp3"
+
+[gemini-3-5-transcribe]
+url = "https://openrouter.ai/api/v1"
+key = "OPENROUTER_API_KEY"
+model = "google/gemini-3.5-transcribe"
+vendor = "Google"
+display_name = "Gemini 3.5 Transcribe"
+href = "https://openrouter.ai/google/gemini-3.5-transcribe"
+notes = "via OpenRouter"
+upload = "mp3"
+
+[elevenlabs-scribe-v2]
+url = "https://openrouter.ai/api/v1"
+key = "OPENROUTER_API_KEY"
+model = "elevenlabs/scribe-v2"
+vendor = "ElevenLabs"
+display_name = "Scribe v2"
+href = "https://openrouter.ai/elevenlabs/scribe-v2"
+notes = "via OpenRouter"
+upload = "mp3"
+
+[mai-transcribe-2]
+url = "https://openrouter.ai/api/v1"
+key = "OPENROUTER_API_KEY"
+model = "microsoft/mai-transcribe-2"
+vendor = "Microsoft AI"
+display_name = "MAI-Transcribe 2"
+href = "https://openrouter.ai/microsoft/mai-transcribe-2"
+notes = "via OpenRouter"
+upload = "mp3"
+
+[grok-stt-1]
+url = "https://openrouter.ai/api/v1"
+key = "OPENROUTER_API_KEY"
+model = "x-ai/grok-stt-1.0"
+vendor = "xAI"
+display_name = "Grok STT 1.0"
+href = "https://openrouter.ai/x-ai/grok-stt-1.0"
+notes = "via OpenRouter"
+upload = "mp3"
+
+[muse-voice-transcribe-1]
+url = "https://openrouter.ai/api/v1"
+key = "OPENROUTER_API_KEY"
+model = "meta/muse-voice-transcribe-1.0"
+vendor = "Meta"
+display_name = "Muse Voice Transcribe 1.0"
+href = "https://openrouter.ai/meta/muse-voice-transcribe-1.0"
+notes = "via OpenRouter"
+upload = "mp3"
+
+[voxtral-mini-transcribe]
+url = "https://openrouter.ai/api/v1"
+key = "OPENROUTER_API_KEY"
+model = "mistralai/voxtral-mini-transcribe"
+vendor = "Mistral AI"
+display_name = "Voxtral Mini Transcribe"
+href = "https://openrouter.ai/mistralai/voxtral-mini-transcribe"
+notes = "via OpenRouter"
+upload = "mp3"
+
+[parakeet-tdt-0-6b-v3]
+url = "https://openrouter.ai/api/v1"
+key = "OPENROUTER_API_KEY"
+model = "nvidia/parakeet-tdt-0.6b-v3"
+vendor = "NVIDIA"
+display_name = "Parakeet TDT 0.6B v3"
+href = "https://openrouter.ai/nvidia/parakeet-tdt-0.6b-v3"
+notes = "via OpenRouter"
+upload = "mp3"
+
+[qwen3-asr-1-7b]
+url = "https://openrouter.ai/api/v1"
+key = "OPENROUTER_API_KEY"
+model = "qwen/qwen3-asr-1.7b"
+vendor = "Alibaba"
+display_name = "Qwen3-ASR 1.7B"
+href = "https://openrouter.ai/qwen/qwen3-asr-1.7b"
+notes = "via OpenRouter"
+upload = "mp3"
+
+# --- direct vendor APIs (not on OpenRouter) ----------------------------------
 
 [omi-general-1]
 url = "https://api.omi.health"      # the omi provider appends /v1/jobs itself (long-audio job API)
@@ -20,21 +172,7 @@ vendor = "Omi"
 display_name = "Omi Medical"
 href = "https://docs.omi.health/"
 
-[gpt-transcribe]
-url = "https://api.openai.com/v1"
-key = "OPENAI_API_KEY"
-vendor = "OpenAI"
-display_name = "GPT Transcribe"
-href = "https://platform.openai.com/docs/guides/speech-to-text"
-upload = "mp3"
-
-[gpt-4o-mini-transcribe]
-url = "https://api.openai.com/v1"
-key = "OPENAI_API_KEY"
-vendor = "OpenAI"
-display_name = "GPT-4o mini Transcribe"
-href = "https://platform.openai.com/docs/guides/speech-to-text"
-upload = "mp3"
+# --- local --------------------------------------------------------------------
 
 [whisper-large-v3]
 provider = "faster-whisper"

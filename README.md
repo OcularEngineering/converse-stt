@@ -51,7 +51,7 @@ smaller: one package, one manifest format, one command.
 cd "Ocular Evals Research"
 uv sync --group dev              # hosted providers only
 uv sync --group dev --extra local  # also installs faster-whisper for local Whisper runs
-cp .env.example .env             # add HF_TOKEN and the provider keys you need, e.g. OPENAI_API_KEY
+cp .env.example .env             # add HF_TOKEN and OPENROUTER_API_KEY (plus any direct vendor keys you use)
 
 uv run ocular-evals dataset pull                 # Ocular AI English sample from Hugging Face -> data/converse-en-sample
 uv run ocular-evals dataset show
@@ -65,9 +65,29 @@ open reports/converse-stt.html
 
 ## Adding a model
 
-Models live in `models.toml` at the project root. For any API that speaks the OpenAI
-`POST /audio/transcriptions` protocol (OpenAI itself, the many hosted services that mirror it, or a
-self-hosted server) a model is a URL and a key:
+Models live in `models.toml` at the project root. There are two ways to reach a hosted model; both end up as
+the same kind of entry, and you can mix them freely.
+
+### Through OpenRouter (one key, many models)
+
+[OpenRouter](https://openrouter.ai/docs/guides/overview/multimodal/stt) exposes a growing catalog of
+speech-to-text models behind one OpenAI-style `/audio/transcriptions` endpoint and one key. The entries in
+`models.toml` marked `via OpenRouter` need nothing more than `OPENROUTER_API_KEY` in `.env`. To add another
+model from the catalog, pass its OpenRouter id:
+
+```bash
+uv run ocular-evals models add <model-name> --openrouter --model <vendor>/<model-id> --vendor <Vendor>
+uv run ocular-evals run --model <model-name>
+```
+
+List what is available with `curl -s "https://openrouter.ai/api/v1/models?output_modalities=transcription"`.
+OpenRouter may route a model id to more than one upstream host and includes the proxy hop in latency, so
+every routed entry carries `notes = "via OpenRouter"` and the leaderboard can say so.
+
+### Directly, with the vendor's URL and key
+
+For any API that speaks the OpenAI `POST /audio/transcriptions` protocol (OpenAI itself, the many hosted
+services that mirror it, or a self-hosted server) a model is a URL and a key:
 
 ```bash
 uv run ocular-evals models add <model-name> --url https://api.<provider>.com/v1 --key <your-api-key>
@@ -87,18 +107,27 @@ uv run ocular-evals models add gpt-4o-mini-transcribe --url https://api.openai.c
 `--key` takes either the secret itself (written to `.env`, never to `models.toml`) or the NAME of a variable
 that already holds it (`--key OPENAI_API_KEY`). Use `--key -` to paste the secret on stdin and keep it out of
 shell history. Useful extras: `--model <api-model-id>` when the id the API expects differs from the name,
-`--vendor` and `--display-name` for the leaderboard, `--upload mp3` when the API caps uploads (OpenAI's 25 MB
-limit is handled automatically), `--provider faster-whisper` for local Whisper or another built-in provider id
-for job-style APIs, `--option key=value` for anything else.
+`--vendor` and `--display-name` for the leaderboard, `--upload mp3` when the API caps uploads (the 25 MB
+limits of OpenAI and OpenRouter are handled automatically), `--provider faster-whisper` for local Whisper or
+another built-in provider id for job-style APIs, `--option key=value` for anything else. To run the same model
+both ways, give the direct entry its own name (or use `--replace` to switch an existing one).
 
 Editing the file by hand is equally fine:
 
 ```toml
-[<model-name>]
+[<model-name>]                           # direct
 url = "https://api.<provider>.com/v1"    # base URL; /audio/transcriptions is implied
 key = "<PROVIDER>_API_KEY"               # NAME of the variable in .env
 model = "<api-model-id>"                 # optional, defaults to the table name
 vendor = "<Provider>"                    # optional, leaderboard label
+
+[<model-name>-openrouter]                # the same model through OpenRouter
+url = "https://openrouter.ai/api/v1"
+key = "OPENROUTER_API_KEY"
+model = "<vendor>/<model-id>"
+vendor = "<Provider>"
+notes = "via OpenRouter"
+upload = "mp3"
 ```
 
 `ocular-evals models` lists everything, `models show <name>` prints the resolved config, `models remove <name>`
