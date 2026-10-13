@@ -23,8 +23,7 @@ from ocular_evals.runner import (
     transcribe_dataset,
 )
 
-CONFIG = parse_model_config(
-    """
+CONFIG_TEXT = """
 name = "fake-model"
 display_name = "Fake Model"
 vendor = "Tests"
@@ -32,7 +31,7 @@ provider = "fake"
 model = "fake-1"
 href = "https://example.com"
 """
-)
+CONFIG = parse_model_config(CONFIG_TEXT)
 
 REFERENCES = {
     ("s1", "a"): "Hello there, <breath/> how are you doing today?",
@@ -133,6 +132,23 @@ def test_run_scores_and_resumes(dataset, tmp_path):
     assert (output / SUMMARY_FILE).exists()
 
 
+def test_run_record_keeps_the_dataset_root_portable(dataset, tmp_path, monkeypatch):
+    """A run made from the project directory records a relative root, so run.json carries no user paths."""
+    monkeypatch.chdir(tmp_path)
+    output = tmp_path / "run"
+    transcribe_dataset(dataset, CONFIG, output, provider=FakeProvider(CONFIG), log=lambda _: None)
+    record = json.loads((output / "run.json").read_text())
+    assert record["dataset"]["root"] == "dataset"
+    assert score_run(output)["tracks"]["scored"] == 4, "re-scoring resolves the relative root from the same directory"
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    transcribe_dataset(dataset, CONFIG, tmp_path / "run2", provider=FakeProvider(CONFIG), log=lambda _: None)
+    record = json.loads((tmp_path / "run2" / "run.json").read_text())
+    assert Path(record["dataset"]["root"]).is_absolute(), "a dataset outside the working directory stays absolute"
+
+
 def test_failures_are_recorded_redacted_and_stop_after_limit(dataset, tmp_path):
     output = tmp_path / "run"
     provider = FakeProvider(CONFIG, fail={("s1", "ch1"), ("s1", "ch2"), ("s2", "ch1")})
@@ -206,6 +222,31 @@ def test_report_payload_and_html(dataset, tmp_path):
     assert page.exists() and html.startswith("<!DOCTYPE html>")
     # Default report: only harness runs, no published rows.
     assert '"published": []' in html and "Reson8" not in html
+
+
+def test_grouped_runs_land_on_the_version_1_tab(dataset, tmp_path):
+    board_run = tmp_path / "board"
+    transcribe_dataset(dataset, CONFIG, board_run, provider=FakeProvider(CONFIG), log=lambda _: None)
+    score_run(board_run, dataset=dataset)
+    v1_config = parse_model_config(
+        CONFIG_TEXT.replace('name = "fake-model"', 'name = "gpt-4o-transcribe"').replace(
+            'vendor = "Tests"', 'vendor = "Tests"\ngroup = "converse-stt-1.0"'
+        )
+    )
+    v1_run = tmp_path / "v1"
+    transcribe_dataset(dataset, v1_config, v1_run, provider=FakeProvider(v1_config), log=lambda _: None)
+    score_run(v1_run, dataset=dataset)
+
+    payload = build_payload([board_run, v1_run], board=load_board("converse-stt"))
+
+    assert [run["id"] for run in payload["runs"]] == ["fake-model"], "grouped runs stay off the 2.0 board"
+    assert [run["id"] for run in payload["groupRuns"]["converse-stt-1.0"]] == ["gpt-4o-transcribe"]
+    matched = {model["name"]: model.get("rerun") for model in payload["published"]}
+    assert matched["GPT-4o Transcribe"] == "gpt-4o-transcribe"
+    assert matched["Gradium"] is None and "blocked" in next(m for m in payload["published"] if m["name"] == "Gradium")
+    assert payload["groupExtra"] == []
+    html = render_html(payload)
+    assert "Version 1 models" in html and '"group": "converse-stt-1.0"' in html
 
 
 def test_damaged_audio_is_never_sent_to_the_provider(dataset, tmp_path):

@@ -268,6 +268,15 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def portable_path(path: Path) -> str:
+    """``path`` relative to the working directory when inside it, else absolute (keeps user names out of manifests)."""
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(Path.cwd().resolve()).as_posix()
+    except ValueError:
+        return str(resolved)
+
+
 def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -494,7 +503,7 @@ def build_from_folder(source_dir: Path, output: Path) -> Dataset:
     base = metadata.parent
     source = {
         "kind": "folder",
-        "path": str(source_dir.resolve()),
+        "path": portable_path(source_dir),
         "metadata_path": metadata.relative_to(source_dir).as_posix(),
         "metadata_sha256": sha256_file(metadata),
     }
@@ -575,6 +584,7 @@ __all__ = [
     "build_from_folder",
     "capture_ms_from_name",
     "load_dataset",
+    "portable_path",
     "pull_dataset",
     "read_jsonl",
     "sha256_file",

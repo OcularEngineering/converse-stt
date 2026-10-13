@@ -30,7 +30,7 @@ _ENV_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
 _TRANSCRIPTIONS_SUFFIX = "/audio/transcriptions"
 
 _FIELD_ALIASES = {"url": "base_url", "key": "api_key_env"}
-_TOP_LEVEL = {"name", "display_name", "vendor", "provider", "model", "env", "href", "notes", "options"}
+_TOP_LEVEL = {"name", "display_name", "vendor", "provider", "model", "env", "href", "notes", "group", "options"}
 
 
 def registry_path(path: Path | None = None) -> Path:
@@ -101,7 +101,7 @@ def _toml_scalar(value: Any) -> str:
 def _config_dict_to_toml(data: dict[str, Any]) -> str:
     """Render one config dict as TOML text (used both for parsing and for writing the file back)."""
     lines = []
-    for field in ("name", "display_name", "vendor", "provider", "model", "env", "href", "notes"):
+    for field in ("name", "display_name", "vendor", "provider", "model", "env", "href", "notes", "group"):
         if field in data and data[field] not in (None, "", []):
             lines.append(f"{field} = {_toml_scalar(data[field])}")
     options = data.get("options") or {}
@@ -166,6 +166,7 @@ class Registry:
         display_name: str | None = None,
         href: str | None = None,
         notes: str | None = None,
+        group: str | None = None,
         options: dict[str, Any] | None = None,
         replace: bool = False,
     ) -> ModelConfig:
@@ -180,7 +181,13 @@ class Registry:
             entry["model"] = model
         if provider != DEFAULT_PROVIDER:
             entry["provider"] = provider
-        for field, value in (("vendor", vendor), ("display_name", display_name), ("href", href), ("notes", notes)):
+        for field, value in (
+            ("vendor", vendor),
+            ("display_name", display_name),
+            ("href", href),
+            ("notes", notes),
+            ("group", group),
+        ):
             if value:
                 entry[field] = value
         if options:
@@ -221,7 +228,7 @@ class Registry:
         header = (
             "# Models the Ocular AI Converse-STT harness runs. One table per model.\n"
             "# Minimum for an OpenAI-compatible endpoint: url + key (the NAME of the variable in .env).\n"
-            "# Optional: model (defaults to the table name), vendor, display_name, href, notes, provider,\n"
+            "# Optional: model (defaults to the table name), vendor, display_name, href, notes, group, provider,\n"
             '# and provider options such as upload = "mp3" or response_format = "text".\n'
             "# Add one from the shell: ocular-evals models add <name> --url <base url> --key <secret or ENV_NAME>\n"
         )

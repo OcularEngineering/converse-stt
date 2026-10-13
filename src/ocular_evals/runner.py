@@ -32,7 +32,7 @@ from typing import Any
 
 from ocular_evals import __version__
 from ocular_evals.config import ModelConfig
-from ocular_evals.dataset import Conversation, Dataset, Track, load_dataset, read_jsonl, sha256_file
+from ocular_evals.dataset import Conversation, Dataset, Track, load_dataset, portable_path, read_jsonl, sha256_file
 from ocular_evals.env import redact
 from ocular_evals.metrics import EditCounts, percent, primary_metric, score_text
 from ocular_evals.providers import Provider, ProviderError, create_provider
@@ -109,7 +109,7 @@ def _run_record(dataset: Dataset, config: ModelConfig, options: RunOptions) -> d
         "harness": {"name": "ocular-evals", "version": __version__},
         "model": config.to_dict(),
         "model_digest": config.digest(),
-        "dataset": {"root": str(dataset.root.resolve()), "digest": dataset.digest(), "source": dataset.source},
+        "dataset": {"root": portable_path(dataset.root), "digest": dataset.digest(), "source": dataset.source},
         "profile": options.profile,
     }
 

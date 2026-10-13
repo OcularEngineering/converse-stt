@@ -16,6 +16,7 @@ build/
 # Data and run artifacts (large, reproducible from the manifest)
 data/
 runs/
+runs-extra/
 reports/*.html
 !reports/.gitkeep
 

@@ -10,39 +10,62 @@
 #   * directly: url = the vendor's own base URL and key = the NAME of that vendor's key in .env,
 #     e.g. url = "https://api.openai.com/v1", key = "OPENAI_API_KEY". Use a different table name
 #     (or `models add --replace`) to run the same model both ways.
+#   * APIs that do not speak the OpenAI protocol use a native adapter: provider = "xai" (api.x.ai /stt)
+#     or provider = "meta" (api.meta.ai /asr/transcribe); only key + model are needed.
 # Uploads go as 64 kbps mono MP3 (upload = "mp3") because hosted APIs cap multipart uploads at 25 MB.
+#
+# Board policy: each vendor's latest general-purpose transcription model, plus every Converse-STT 1.0
+# model that the credentials held can reach (those also appear on the leaderboard's "Version 1
+# models" tab beside their 1.0 figure). Sibling and older-generation models that are on neither list
+# were run with this harness and retired from the board (numbers in
+# docs/converse-stt-2.0-technical-report.md, Appendix D):
+#   OpenAI gpt-4o-transcribe-diarize, openai/whisper-large-v3 · xAI x-ai/grok-stt-1.0
+#   Microsoft microsoft/mai-transcribe-1.5 · Alibaba qwen/qwen3-asr-0.6b · Omi omi-medical-1
+# Re-add any of them with `ocular-evals models add` to run them again.
 
-# --- via OpenRouter ----------------------------------------------------------
-
-[gpt-4o-transcribe]
-url = "https://openrouter.ai/api/v1"
-key = "OPENROUTER_API_KEY"
-model = "openai/gpt-4o-transcribe"
-vendor = "OpenAI"
-display_name = "GPT-4o Transcribe"
-href = "https://openrouter.ai/openai/gpt-4o-transcribe"
-notes = "via OpenRouter"
-upload = "mp3"
-
-[gpt-4o-mini-transcribe]
-url = "https://openrouter.ai/api/v1"
-key = "OPENROUTER_API_KEY"
-model = "openai/gpt-4o-mini-transcribe"
-vendor = "OpenAI"
-display_name = "GPT-4o mini Transcribe"
-href = "https://openrouter.ai/openai/gpt-4o-mini-transcribe"
-notes = "via OpenRouter"
-upload = "mp3"
+# --- direct vendor APIs (OpenAI-compatible) ---------------------------------
 
 [gpt-transcribe]
-url = "https://openrouter.ai/api/v1"
-key = "OPENROUTER_API_KEY"
-model = "openai/gpt-transcribe"
+url = "https://api.openai.com/v1"
+key = "OPENAI_API_KEY"
 vendor = "OpenAI"
 display_name = "GPT Transcribe"
-href = "https://openrouter.ai/openai/gpt-transcribe"
-notes = "via OpenRouter"
+href = "https://platform.openai.com/docs/guides/speech-to-text"
 upload = "mp3"
+
+[voxtral-mini-transcribe-2]
+url = "https://api.mistral.ai/v1"
+key = "MISTRAL_API_KEY"
+model = "voxtral-mini-2602"
+vendor = "Mistral AI"
+display_name = "Voxtral Mini Transcribe 2"
+href = "https://docs.mistral.ai/capabilities/audio/"
+notes = "timestamp_granularities=segment: the plain json request falls into a 13,000-word repetition loop on one 15-minute track; segment decoding does not."
+upload = "mp3"
+timestamp_granularities = "segment"
+
+# --- direct vendor APIs (native adapters) -----------------------------------
+
+[grok-voice-transcribe-2]
+provider = "xai"                     # POST https://api.x.ai/v1/stt
+key = "XAI_API_KEY"
+model = "grok-voice-transcribe-2.0"
+vendor = "xAI"
+display_name = "Grok Voice Transcribe 2.0"
+href = "https://docs.x.ai/developers/model-capabilities/audio/speech-to-text"
+notes = "filler_words=true so fillers are kept, as in the verbatim references; format=true (inverse text normalization)."
+upload = "mp3"
+
+[muse-voice-transcribe-1]
+provider = "meta"                    # POST https://api.meta.ai/v1/asr/transcribe
+key = "META_API_KEY"
+model = "muse-voice-transcribe-1.0"
+vendor = "Meta"
+display_name = "Muse Voice Transcribe 1.0"
+href = "https://dev.meta.ai/docs/speech-to-text"
+notes = "WAV-only API capped at 10 minutes per clip: each track is cut at a pause into chunks of at most 9 minutes and the transcripts are joined."
+
+# --- via OpenRouter ----------------------------------------------------------
 
 [deepgram-nova-3]
 url = "https://openrouter.ai/api/v1"
@@ -61,18 +84,10 @@ model = "assemblyai/universal-3-5-pro"
 vendor = "AssemblyAI"
 display_name = "Universal-3.5 Pro"
 href = "https://openrouter.ai/assemblyai/universal-3-5-pro"
-notes = "via OpenRouter"
-upload = "mp3"
-
-[google-chirp-3]
-url = "https://openrouter.ai/api/v1"
-key = "OPENROUTER_API_KEY"
-model = "google/chirp-3"
-vendor = "Google"
-display_name = "Chirp 3"
-href = "https://openrouter.ai/google/chirp-3"
-notes = "via OpenRouter"
-upload = "mp3"
+notes = "via OpenRouter, which accepts only WAV for AssemblyAI and caps the upload at a few MB: tracks are cut at a pause into 16 kHz WAV chunks of at most 120 s."
+upload = "wav16k"
+chunk_s = 120
+search_s = 10
 
 [gemini-3-5-transcribe]
 url = "https://openrouter.ai/api/v1"
@@ -104,35 +119,9 @@ href = "https://openrouter.ai/microsoft/mai-transcribe-2"
 notes = "via OpenRouter"
 upload = "mp3"
 
-[grok-stt-1]
-url = "https://openrouter.ai/api/v1"
-key = "OPENROUTER_API_KEY"
-model = "x-ai/grok-stt-1.0"
-vendor = "xAI"
-display_name = "Grok STT 1.0"
-href = "https://openrouter.ai/x-ai/grok-stt-1.0"
-notes = "via OpenRouter"
-upload = "mp3"
-
-[muse-voice-transcribe-1]
-url = "https://openrouter.ai/api/v1"
-key = "OPENROUTER_API_KEY"
-model = "meta/muse-voice-transcribe-1.0"
-vendor = "Meta"
-display_name = "Muse Voice Transcribe 1.0"
-href = "https://openrouter.ai/meta/muse-voice-transcribe-1.0"
-notes = "via OpenRouter"
-upload = "mp3"
-
-[voxtral-mini-transcribe]
-url = "https://openrouter.ai/api/v1"
-key = "OPENROUTER_API_KEY"
-model = "mistralai/voxtral-mini-transcribe"
-vendor = "Mistral AI"
-display_name = "Voxtral Mini Transcribe"
-href = "https://openrouter.ai/mistralai/voxtral-mini-transcribe"
-notes = "via OpenRouter"
-upload = "mp3"
+# mistralai/voxtral-mini-transcribe on OpenRouter is the same voxtral-mini-2602 model as [voxtral-mini-transcribe-2]
+# above, but OpenRouter does not forward timestamp_granularities, so that route cannot avoid the repetition loop.
+# Run the model directly instead.
 
 [parakeet-tdt-0-6b-v3]
 url = "https://openrouter.ai/api/v1"
@@ -143,6 +132,30 @@ display_name = "Parakeet TDT 0.6B v3"
 href = "https://openrouter.ai/nvidia/parakeet-tdt-0.6b-v3"
 notes = "via OpenRouter"
 upload = "mp3"
+
+# NVIDIA's Nemotron streaming ASR models run locally through Transformers (uv sync --extra nemotron).
+# They are cache-aware streaming models: the lookahead (right attention context, in 80 ms frames) is the
+# only knob between the 80 ms low-latency point and the 1.12 s most-accurate point, and offline inference
+# at a lookahead equals streaming at that chunk size. Board rows use lookahead 13 (1.12 s), the batch-quality
+# setting; streaming operating points are reported separately in the technical report.
+[nemotron-3-asr-streaming-en-0-6b]
+provider = "nemotron-asr"
+model = "nvidia/nemotron-speech-streaming-en-0.6b"
+vendor = "NVIDIA"
+display_name = "Nemotron 3 ASR Streaming (EN) 0.6B"
+href = "https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b"
+notes = "local (Transformers), lookahead 1.12 s"
+lookahead_frames = 13
+
+[nemotron-3-5-asr-streaming-0-6b]
+provider = "nemotron-asr"
+model = "nvidia/nemotron-3.5-asr-streaming-0.6b"
+vendor = "NVIDIA"
+display_name = "Nemotron 3.5 ASR Streaming 0.6B"
+href = "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b"
+notes = "local (Transformers), lookahead 1.12 s, language en-US"
+lookahead_frames = 13
+language = "en-US"
 
 [qwen3-asr-1-7b]
 url = "https://openrouter.ai/api/v1"
@@ -164,28 +177,64 @@ vendor = "Omi"
 display_name = "Omi General"
 href = "https://docs.omi.health/"
 
-[omi-medical-1]
-url = "https://api.omi.health"
-key = "OMI_API_KEY"
-provider = "omi"
-vendor = "Omi"
-display_name = "Omi Medical"
-href = "https://docs.omi.health/"
+# ---------------------------------------------------------------------------------------------
+# Converse-STT 1.0 models re-run with this harness. They are ranked on the 2.0 board like any other
+# entry and the board file (src/ocular_evals/boards/converse-stt.json) also pairs each with its 1.0
+# figure on the leaderboard's "Version 1 models" tab. Nova-3 and Universal-3.5 Pro above are their
+# own re-runs. Setting group = "converse-stt-1.0" on an entry would instead keep it off the 2.0 board
+# and show it on the Version 1 tab only.
+# Not reproducible with the credentials held: Cartesia Ink 2, Smallest Pulse, Google Chirp 2,
+# Speechmatics Linden, Deepgram Flux (English, Multilingual; the Deepgram key is rejected with 401),
+# Gradium, Inworld STT-1.
 
-# --- local --------------------------------------------------------------------
+[reson8]
+provider = "reson8"
+key = "RESON8_API_KEY"
+model = "reson8"
+vendor = "Reson8"
+display_name = "Reson8"
+href = "https://docs.reson8.dev/speech-to-text/prerecorded/"
+notes = "prerecorded endpoint; filler_mode=verbatim; no model id (current pipeline)"
+upload = "mp3"
+filler_mode = "verbatim"
 
-[whisper-large-v3]
-provider = "faster-whisper"
-model = "Systran/faster-whisper-large-v3"
+[gpt-realtime-whisper]
+provider = "openai-realtime"
+key = "OPENAI_API_KEY"
+model = "whisper-1"
 vendor = "OpenAI"
-display_name = "Whisper Large v3"
-href = "https://github.com/SYSTRAN/faster-whisper"
-notes = "Local CTranslate2 Whisper; needs `uv sync --extra local`."
+display_name = "GPT Realtime Whisper"
+href = "https://platform.openai.com/docs/guides/realtime-transcription"
+notes = "Realtime API transcription session, server VAD, whisper-1"
 
-[whisper-large-v3.options]
-beam_size = 5
-temperature = 0.0
-condition_on_previous_text = false
-vad_filter = true
-compute_type = "default"
-device = "auto"
+[google-chirp-3]
+url = "https://openrouter.ai/api/v1"
+key = "OPENROUTER_API_KEY"
+model = "google/chirp-3"
+vendor = "Google"
+display_name = "Chirp 3"
+href = "https://openrouter.ai/google/chirp-3"
+notes = "via OpenRouter; 60 s synchronous limit, client chunks"
+upload = "mp3"
+chunk_s = 55
+search_s = 5
+
+[gpt-4o-mini-transcribe]
+url = "https://api.openai.com/v1"
+key = "OPENAI_API_KEY"
+vendor = "OpenAI"
+display_name = "GPT-4o mini Transcribe"
+href = "https://platform.openai.com/docs/guides/speech-to-text"
+notes = "chunking_strategy=auto (required for long audio)"
+upload = "mp3"
+chunking_strategy = "auto"
+
+[gpt-4o-transcribe]
+url = "https://api.openai.com/v1"
+key = "OPENAI_API_KEY"
+vendor = "OpenAI"
+display_name = "GPT-4o Transcribe"
+href = "https://platform.openai.com/docs/guides/speech-to-text"
+notes = "chunking_strategy=auto (required for long audio)"
+upload = "mp3"
+chunking_strategy = "auto"

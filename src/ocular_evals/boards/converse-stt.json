@@ -5,20 +5,141 @@
   "source": "https://www.useocular.com/converse/stt",
   "metric": "wer",
   "models": [
-    {"name": "Reson8", "vendor": "Reson8", "wer": 2.93, "pipecat": 2.10, "pipecatRank": 3, "href": "https://www.reson8.dev/"},
-    {"name": "Cartesia Ink 2", "vendor": "Cartesia", "wer": 3.09, "pipecat": 2.39, "pipecatRank": 5, "href": "https://www.cartesia.ai/"},
-    {"name": "Smallest Pulse", "vendor": "Smallest", "wer": 3.46, "pipecat": 3.66, "pipecatRank": 11, "href": "https://smallest.ai/"},
-    {"name": "GPT Realtime Whisper", "vendor": "OpenAI", "wer": 3.53, "pipecat": 2.16, "pipecatRank": 4, "href": "https://openai.com/"},
-    {"name": "Google Chirp 2", "vendor": "Google", "wer": 3.80, "pipecat": 2.59, "pipecatRank": 7, "href": "https://cloud.google.com/speech-to-text"},
-    {"name": "Speechmatics Linden", "vendor": "Speechmatics", "wer": 3.93, "pipecat": 2.46, "pipecatRank": 6, "href": "https://www.speechmatics.com/"},
-    {"name": "Deepgram Flux English", "vendor": "Deepgram", "wer": 4.18, "pipecat": 3.90, "pipecatRank": 13, "href": "https://deepgram.com/"},
-    {"name": "Google Chirp 3", "vendor": "Google", "wer": 4.19, "pipecat": 2.00, "pipecatRank": 2, "href": "https://cloud.google.com/speech-to-text"},
-    {"name": "AssemblyAI Universal 3.5 Pro", "vendor": "AssemblyAI", "wer": 4.23, "pipecat": 1.93, "pipecatRank": 1, "href": "https://www.assemblyai.com/"},
-    {"name": "Deepgram Nova-3", "vendor": "Deepgram", "wer": 4.39, "pipecat": 3.46, "pipecatRank": 10, "href": "https://deepgram.com/"},
-    {"name": "GPT-4o Mini Transcribe", "vendor": "OpenAI", "wer": 4.45, "pipecat": 3.35, "pipecatRank": 9, "href": "https://openai.com/"},
-    {"name": "Gradium", "vendor": "Gradium", "wer": 4.45, "pipecat": 6.48, "pipecatRank": 15, "href": "https://gradium.ai/"},
-    {"name": "Deepgram Flux Multilingual", "vendor": "Deepgram", "wer": 4.53, "pipecat": 4.96, "pipecatRank": 14, "href": "https://deepgram.com/"},
-    {"name": "Inworld STT-1", "vendor": "Inworld", "wer": 10.60, "pipecat": 2.72, "pipecatRank": 8, "href": "https://inworld.ai/"},
-    {"name": "GPT-4o Transcribe", "vendor": "OpenAI", "wer": 12.45, "pipecat": 3.90, "pipecatRank": 12, "href": "https://openai.com/"}
-  ]
+    {
+      "name": "Reson8",
+      "vendor": "Reson8",
+      "wer": 2.93,
+      "pipecat": 2.1,
+      "pipecatRank": 3,
+      "href": "https://www.reson8.dev/",
+      "run": "reson8"
+    },
+    {
+      "name": "Cartesia Ink 2",
+      "vendor": "Cartesia",
+      "wer": 3.09,
+      "pipecat": 2.39,
+      "pipecatRank": 5,
+      "href": "https://www.cartesia.ai/",
+      "blocked": "WebSocket-only API; no Cartesia key held"
+    },
+    {
+      "name": "Smallest Pulse",
+      "vendor": "Smallest",
+      "wer": 3.46,
+      "pipecat": 3.66,
+      "pipecatRank": 11,
+      "href": "https://smallest.ai/",
+      "blocked": "no API access with the credentials held"
+    },
+    {
+      "name": "GPT Realtime Whisper",
+      "vendor": "OpenAI",
+      "wer": 3.53,
+      "pipecat": 2.16,
+      "pipecatRank": 4,
+      "href": "https://openai.com/",
+      "run": "gpt-realtime-whisper"
+    },
+    {
+      "name": "Google Chirp 2",
+      "vendor": "Google",
+      "wer": 3.8,
+      "pipecat": 2.59,
+      "pipecatRank": 7,
+      "href": "https://cloud.google.com/speech-to-text",
+      "blocked": "not on OpenRouter; no Google Cloud credentials held"
+    },
+    {
+      "name": "Speechmatics Linden",
+      "vendor": "Speechmatics",
+      "wer": 3.93,
+      "pipecat": 2.46,
+      "pipecatRank": 6,
+      "href": "https://www.speechmatics.com/",
+      "blocked": "no API access with the credentials held"
+    },
+    {
+      "name": "Deepgram Flux English",
+      "vendor": "Deepgram",
+      "wer": 4.18,
+      "pipecat": 3.9,
+      "pipecatRank": 13,
+      "href": "https://deepgram.com/",
+      "blocked": "streaming-only; the Deepgram key held is rejected (HTTP 401)"
+    },
+    {
+      "name": "Google Chirp 3",
+      "vendor": "Google",
+      "wer": 4.19,
+      "pipecat": 2.0,
+      "pipecatRank": 2,
+      "href": "https://cloud.google.com/speech-to-text",
+      "run": "google-chirp-3"
+    },
+    {
+      "name": "AssemblyAI Universal 3.5 Pro",
+      "vendor": "AssemblyAI",
+      "wer": 4.23,
+      "pipecat": 1.93,
+      "pipecatRank": 1,
+      "href": "https://www.assemblyai.com/",
+      "run": "assemblyai-universal-3-5-pro"
+    },
+    {
+      "name": "Deepgram Nova-3",
+      "vendor": "Deepgram",
+      "wer": 4.39,
+      "pipecat": 3.46,
+      "pipecatRank": 10,
+      "href": "https://deepgram.com/",
+      "run": "deepgram-nova-3"
+    },
+    {
+      "name": "GPT-4o Mini Transcribe",
+      "vendor": "OpenAI",
+      "wer": 4.45,
+      "pipecat": 3.35,
+      "pipecatRank": 9,
+      "href": "https://openai.com/",
+      "run": "gpt-4o-mini-transcribe"
+    },
+    {
+      "name": "Gradium",
+      "vendor": "Gradium",
+      "wer": 4.45,
+      "pipecat": 6.48,
+      "pipecatRank": 15,
+      "href": "https://gradium.ai/",
+      "blocked": "no API access with the credentials held"
+    },
+    {
+      "name": "Deepgram Flux Multilingual",
+      "vendor": "Deepgram",
+      "wer": 4.53,
+      "pipecat": 4.96,
+      "pipecatRank": 14,
+      "href": "https://deepgram.com/",
+      "blocked": "streaming-only; the Deepgram key held is rejected (HTTP 401)"
+    },
+    {
+      "name": "Inworld STT-1",
+      "vendor": "Inworld",
+      "wer": 10.6,
+      "pipecat": 2.72,
+      "pipecatRank": 8,
+      "href": "https://inworld.ai/",
+      "blocked": "no API access with the credentials held"
+    },
+    {
+      "name": "GPT-4o Transcribe",
+      "vendor": "OpenAI",
+      "wer": 12.45,
+      "pipecat": 3.9,
+      "pipecatRank": 12,
+      "href": "https://openai.com/",
+      "run": "gpt-4o-transcribe"
+    }
+  ],
+  "group": "converse-stt-1.0"
 }

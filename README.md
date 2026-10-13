@@ -34,24 +34,29 @@ hypothesis so a score can be read, not just quoted.
 conversations and on public Pipecat audio. Twelve of the 15 had a higher error rate on the conversational
 recordings, four more than doubled, and the leading model changed with the dataset: the model that led Pipecat
 at 1.93% ranked ninth on the conversations at 4.23%, while the conversational leader scored 2.93%. Those
-figures are kept in `src/ocular_evals/boards/converse-stt.json` and can be shown next to 2.0 runs with
-`report --board converse-stt`. Full write-up: [useocular.com/converse/stt](https://www.useocular.com/converse/stt).
+figures are kept in `src/ocular_evals/boards/converse-stt.json`. With `report --board converse-stt` the page
+gets a **Version 1 models** tab that lists those 15 models with their 1.0 figure and, where the 1.0 model has
+been re-run with this harness (matched through the board file's `run` field), the 2.0 score beside it; models
+that could not be re-run say why. The re-runs are ranked on the 2.0 board as well; an entry tagged
+`group = "converse-stt-1.0"` in `models.toml` would instead appear on the Version 1 tab only. Full write-up: [useocular.com/converse/stt](https://www.useocular.com/converse/stt).
 
 **Converse-STT 2.0 (this repository).** Independent of any evaluation partner. Ocular AI runs every model
 through this harness on the same Hi-Fi conversations, publishes the harness, the model configurations and the
 dataset manifest, and adds models as they are released.
 
-The design borrows from the public research harnesses we compare against (separate channel per speaker,
-summed edit counts, Whisper-style text normalization) but the implementation is independent and much
-smaller: one package, one manifest format, one command.
+The design follows established conventions for conversational ASR evaluation (separate channel per speaker,
+summed edit counts, Whisper-style text normalization), and the implementation is deliberately small: one
+package, one manifest format, one command. Results and methodology are written up in
+[`docs/converse-stt-2.0-technical-report.md`](docs/converse-stt-2.0-technical-report.md).
 
 ## Quick start
 
 ```bash
-cd "Ocular Evals Research"
+git clone https://github.com/OcularEngineering/converse-stt && cd converse-stt
 uv sync --group dev              # hosted providers only
 uv sync --group dev --extra local  # also installs faster-whisper for local Whisper runs
-cp .env.example .env             # add HF_TOKEN and OPENROUTER_API_KEY (plus any direct vendor keys you use)
+uv sync --group dev --extra nemotron  # torch + transformers for NVIDIA's Nemotron streaming ASR models (local)
+cp .env.example .env             # add OPENROUTER_API_KEY and any direct vendor keys you use (HF_TOKEN is optional)
 
 uv run ocular-evals dataset pull                 # Ocular AI English sample from Hugging Face -> data/converse-en-sample
 uv run ocular-evals dataset show
@@ -80,8 +85,9 @@ uv run ocular-evals models add <model-name> --openrouter --model <vendor>/<model
 uv run ocular-evals run --model <model-name>
 ```
 
-List what is available with `curl -s "https://openrouter.ai/api/v1/models?output_modalities=transcription"`.
-OpenRouter may route a model id to more than one upstream host and includes the proxy hop in latency, so
+OpenRouter's `/models` catalogue does not enumerate transcription models; the `/audio/transcriptions` endpoint answers
+`Model <id> does not exist` for ids it does not serve, so a quick `ocular-evals run --model <name> --conversation <one id>`
+is the reliable way to find out. OpenRouter may route a model id to more than one upstream host and includes the proxy hop in latency, so
 every routed entry carries `notes = "via OpenRouter"` and the leaderboard can say so.
 
 ### Directly, with the vendor's URL and key
@@ -108,8 +114,8 @@ uv run ocular-evals models add gpt-4o-mini-transcribe --url https://api.openai.c
 that already holds it (`--key OPENAI_API_KEY`). Use `--key -` to paste the secret on stdin and keep it out of
 shell history. Useful extras: `--model <api-model-id>` when the id the API expects differs from the name,
 `--vendor` and `--display-name` for the leaderboard, `--upload mp3` when the API caps uploads (the 25 MB
-limits of OpenAI and OpenRouter are handled automatically), `--provider faster-whisper` for local Whisper or
-another built-in provider id for job-style APIs, `--option key=value` for anything else. To run the same model
+limits of OpenAI and OpenRouter are handled automatically), `--provider faster-whisper` for local Whisper, `--provider nemotron-asr` for NVIDIA's Nemotron
+streaming models, or another built-in provider id for job-style APIs, `--option key=value` for anything else. To run the same model
 both ways, give the direct entry its own name (or use `--replace` to switch an existing one).
 
 Editing the file by hand is equally fine:
@@ -170,10 +176,11 @@ built-in examples live in `src/ocular_evals/models/*.toml`, and any TOML file wi
 name = "gpt-4o-mini-transcribe"
 display_name = "GPT-4o mini Transcribe"
 vendor = "OpenAI"
-provider = "openai-compatible"   # openai-compatible | omi | faster-whisper
+provider = "openai-compatible"   # openai-compatible | openai-realtime | xai | meta | reson8 | omi | faster-whisper | nemotron-asr
 model = "gpt-4o-mini-transcribe"
 env = ["OPENAI_API_KEY"]
 href = "https://platform.openai.com/docs/guides/speech-to-text"
+# group = "converse-stt-1.0"    # optional: put the run on the leaderboard's "Version 1 models" tab instead of the 2.0 board
 
 [options]
 response_format = "json"
@@ -182,11 +189,17 @@ upload = "mp3"                   # OpenAI caps uploads at 25 MB
 
 | provider            | what it calls                                                            | key options                                                                 |
 | ------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `openai-compatible` | `POST {base_url}/audio/transcriptions` (OpenAI and any compatible server) | `base_url`, `api_key_env`, `response_format`, `upload` (`flac`/`wav16k`/`mp3`) |
+| `openai-compatible` | `POST {base_url}/audio/transcriptions` (OpenAI and any compatible server) | `base_url`, `api_key_env`, `response_format`, `upload` (`flac`/`wav16k`/`mp3`), `chunking_strategy` (OpenAI server-side VAD chunking, needed for the gpt-4o-transcribe models on long audio), `timestamp_granularities` (Mistral: `"segment"` makes Voxtral decode per segment and avoids its repetition loop on long tracks), `chunk_s` + `search_s` (client-side: cut the track at a pause into chunks of at most `chunk_s` seconds and join the transcripts, for endpoints that cap request duration or size) |
+| `openai-realtime`   | OpenAI Realtime API transcription session over WebSocket (`wss://api.openai.com/v1/realtime?intent=transcription`): 24 kHz PCM streamed at `speed`× real time, server VAD cuts turns, turns are joined in order. This is how Converse-STT 1.0 ran "GPT Realtime Whisper". | `api_key_env`, `speed` (default 10), `silence_ms` (VAD silence, default 500), `vad_threshold`, `prefix_padding_ms`, `prompt`, `language_hint` |
+| `xai`               | `POST https://api.x.ai/v1/stt` (Grok Voice Transcribe)                   | `api_key_env`, `upload`, `format` (inverse text normalization), `filler_words` (default on: references are verbatim) |
+| `reson8`            | `POST https://api.reson8.dev/v1/speech-to-text/prerecorded` (Reson8); the whole file is the request body, settings are query parameters, no model id | `api_key_env`, `upload`, `filler_mode` (`verbatim` default: references are verbatim; `natural`, `clean`), `include_words`, `custom_model_id` |
+| `meta`              | `POST https://api.meta.ai/v1/asr/transcribe` (Muse Voice Transcribe); WAV only, 10 min per clip, so tracks are cut at a pause into chunks and the transcripts joined | `api_key_env`, `mode` (`ENDPOINTING`/`PUSH_TO_TALK`), `chunk_s` (≤ 600), `search_s` |
 | `omi`               | asynchronous job API for long audio: create job, upload, poll for result | `base_url`, `api_key_env`, `response_format`, `poll_wait_s`, `deadline_s`   |
 | `faster-whisper`    | local CTranslate2 Whisper                                                 | `device`, `compute_type`, `beam_size`, `vad_filter`, `condition_on_previous_text` |
+| `nemotron-asr`      | local Transformers inference for NVIDIA's cache-aware streaming models (`nvidia/nemotron-speech-streaming-en-0.6b`, `nvidia/nemotron-3.5-asr-streaming-0.6b`); tracks are cut at pauses into ≤ 400 s pieces (the model's positional limit) | `lookahead_frames` (right context in 80 ms frames: 0 = 80 ms latency … 13 = 1.12 s, the most accurate; offline output at a lookahead equals streaming at that chunk size), `language` (locale prompt for the multilingual 3.5 model), `device` (`auto`/`cpu`/`mps`/`cuda`), `max_chunk_s`, `search_s` |
 
 Options never contain credentials; keys are read from the environment variables listed in `env`.
+The `xai`, `meta` and `reson8` adapters need only `provider`, `key` and `model` in `models.toml`; their base URLs are built in.
 
 ## Layout
 
@@ -198,12 +211,13 @@ src/ocular_evals/
   metrics.py      EditCounts, WER / CER alignment
   config.py       model TOML loading
   registry.py     models.toml parsing / `models add`
-  providers/      openai_compatible, omi, faster_whisper (+ retrying HTTP, audio prep)
+  providers/      openai_compatible, openai_realtime, xai, meta, reson8, omi, faster_whisper, nemotron_asr (+ retrying HTTP, audio prep / chunking)
   runner.py       resumable transcription + scoring of a run directory
   report.py       leaderboard HTML
   models/         built-in model configs
   boards/         Converse-STT 1.0 figures, shown by the report on request (--board)
   templates/      leaderboard.html
+docs/             technical report (Markdown + generated HTML) and its build script
 tests/            pytest, no network
 data/             datasets (gitignored)
 runs/             run directories (gitignored)
@@ -224,8 +238,8 @@ uv run ruff check . && uv run ruff format --check .
 - **More models.** Keep adding hosted and local speech-to-text models to `models.toml` so the board covers
   every provider we are asked about; contributions of new entries are welcome.
 - **More providers.** Native adapters for APIs that do not speak the OpenAI transcription protocol
-  (streaming / WebSocket vendors, batch job APIs) beyond the current `openai-compatible`, `omi` and
-  `faster-whisper` backends.
+  (streaming / WebSocket vendors, batch job APIs) beyond the current `openai-compatible`, `openai-realtime`,
+  `xai`, `meta`, `reson8`, `omi`, `faster-whisper` and `nemotron-asr` backends.
 - **More datasets and languages.** Run the same harness over additional Ocular AI conversation sets as they
   are published, including non-English ones.
 - **Latency and cost.** Record time-to-transcript and per-minute pricing next to accuracy so the board can

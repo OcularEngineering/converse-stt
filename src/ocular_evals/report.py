@@ -138,10 +138,13 @@ def run_payload(run_dir: Path) -> dict[str, Any]:
     model = summary["model"]
     return {
         "id": model["name"],
+        "name_key": model["name"],
         "name": model.get("display_name") or model["name"],
         "vendor": model.get("vendor") or model["provider"],
         "modelId": model["model"],
         "href": model.get("href") or "",
+        "notes": model.get("notes") or "",
+        "group": model.get("group") or "",
         "profile": summary["profile"],
         "wer": _pct(summary["wer"]["rate"]),
         "cer": _pct(summary["cer"]["rate"]),
@@ -162,10 +165,10 @@ def build_payload(
     board: dict[str, Any] | None = None,
     sample_label: str = "This sample",
 ) -> dict[str, Any]:
-    runs = [run_payload(Path(run_dir)) for run_dir in run_dirs]
-    runs = [run for run in runs if run["wer"] is not None]
+    everything = [run_payload(Path(run_dir)) for run_dir in run_dirs]
+    everything = [run for run in everything if run["wer"] is not None]
     seen: set[str] = set()
-    for run in runs:
+    for run in everything:
         base = run["id"]
         suffix = 2
         while run["id"] in seen:
@@ -173,12 +176,34 @@ def build_payload(
             suffix += 1
         seen.add(run["id"])
     board = board if board is not None else empty_board()
+    board_group = board.get("group")
+    # Runs tagged with a group (``group = "converse-stt-1.0"`` in models.toml) belong to that tab, not the 2.0 board.
+    runs = [run for run in everything if not run["group"]]
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for run in everything:
+        if run["group"]:
+            grouped.setdefault(run["group"], []).append(run)
+    by_name = {run["name_key"]: run for run in everything}
+    published = []
+    matched: set[str] = set()
+    for model in board["models"]:
+        entry = dict(model)
+        rerun = by_name.get(str(model.get("run") or ""))
+        if rerun is not None:
+            entry["rerun"] = rerun["id"]
+            matched.add(rerun["id"])
+        published.append(entry)
+    # Group runs that no published row claims are still listed on the group's tab.
+    extra = [run for run in grouped.get(board_group or "", []) if run["id"] not in matched]
     return {
         "generated": datetime.now(UTC).strftime("%b %-d, %Y"),
         "sampleLabel": sample_label,
         "board": {key: value for key, value in board.items() if key != "models"},
-        "published": board["models"],
+        "published": published,
         "runs": runs,
+        "groupRuns": grouped,
+        "groupExtra": [run["id"] for run in extra],
+        "allRuns": everything,
     }
 
 

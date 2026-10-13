@@ -29,9 +29,12 @@ def test_parse_model_config_round_trip():
 def test_digest_ignores_display_fields_but_not_options():
     base = parse_model_config(GOOD)
     renamed = parse_model_config(GOOD.replace('display_name = "Demo"', 'display_name = "Other"'))
+    grouped = parse_model_config(GOOD.replace('vendor = "Acme"', 'vendor = "Acme"\ngroup = "converse-stt-1.0"'))
     changed = parse_model_config(GOOD.replace('response_format = "json"', 'response_format = "text"'))
-    assert base.digest() == renamed.digest()
+    assert base.digest() == renamed.digest() == grouped.digest()
     assert base.digest() != changed.digest()
+    assert base.group is None and grouped.group == "converse-stt-1.0"
+    assert grouped.to_dict()["group"] == "converse-stt-1.0"
 
 
 @pytest.mark.parametrize(

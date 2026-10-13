@@ -52,6 +52,21 @@ def test_registry_shadows_builtins_and_lists_first(tmp_path):
     assert "whisper-tiny" in names
 
 
+def test_group_is_a_display_field_not_an_option(tmp_path):
+    path = tmp_path / "models.toml"
+    path.write_text(
+        '[old]\nurl = "https://x.example/v1"\nkey = "X_KEY"\ngroup = "converse-stt-1.0"\nnotes = "v1"\n',
+        encoding="utf-8",
+    )
+    config = Registry.load(path).config("old")
+    assert config.group == "converse-stt-1.0" and "group" not in config.options
+    registry = Registry.load(path)
+    added = registry.add("new", url="https://x.example/v1", key_env="X_KEY", group="converse-stt-1.0")
+    assert added.group == "converse-stt-1.0"
+    registry.save()
+    assert Registry.load(path).config("new").group == "converse-stt-1.0"
+
+
 def test_secret_in_key_field_is_rejected(tmp_path):
     path = tmp_path / "models.toml"
     path.write_text('[leaky]\nurl = "https://x.ai/v1"\nkey = "sk-live-abcdef"\n', encoding="utf-8")

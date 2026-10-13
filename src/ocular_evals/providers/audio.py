@@ -52,7 +52,8 @@ def _workdir(workdir: Path | None) -> Path:
     return Path(tempfile.mkdtemp(prefix="ocular-evals-"))
 
 
-def _to_wav16k(src: Path, dst: Path) -> None:
+def _load_mono16k(src: Path) -> np.ndarray:
+    """Decode ``src`` to mono float32 samples at 16 kHz, clipped to [-1, 1]."""
     try:
         data, rate = sf.read(str(src), dtype="float32", always_2d=True)
     except Exception as exc:
@@ -64,8 +65,71 @@ def _to_wav16k(src: Path, dst: Path) -> None:
         src_t = np.arange(mono.size, dtype=np.float64) / float(rate)
         dst_t = np.arange(count, dtype=np.float64) / float(_TARGET_RATE)
         mono = np.interp(dst_t, src_t, mono.astype(np.float64)).astype(np.float32)
-    mono = np.clip(mono, -1.0, 1.0)
-    sf.write(str(dst), mono, _TARGET_RATE, subtype="PCM_16", format="WAV")
+    return np.clip(mono, -1.0, 1.0)
+
+
+def _to_wav16k(src: Path, dst: Path) -> None:
+    sf.write(str(dst), _load_mono16k(src), _TARGET_RATE, subtype="PCM_16", format="WAV")
+
+
+def _quietest_sample(mono: np.ndarray, target: int, *, search: int, frame: int) -> int:
+    """Index of the start of the lowest-energy ``frame``-sample window within ``target +- search``."""
+    lo = max(0, target - search)
+    hi = min(mono.size - frame, target + search)
+    if hi <= lo:
+        return min(max(target, 0), mono.size)
+    squares = np.square(mono[lo : hi + frame].astype(np.float64))
+    window = np.convolve(squares, np.ones(frame), mode="valid")  # energy of every frame starting in [lo, hi]
+    return lo + int(np.argmin(window)) + frame // 2
+
+
+def split_wav16k(
+    path: Path,
+    *,
+    max_chunk_s: float,
+    search_s: float = 30.0,
+    frame_s: float = 0.5,
+    workdir: Path | None = None,
+) -> list[tuple[Path, float]]:
+    """Cut ``path`` into mono 16 kHz PCM16 WAV chunks of at most ``max_chunk_s`` seconds.
+
+    Returns ``[(chunk_path, start_s), ...]`` in order. A file that already fits is written as a
+    single chunk. Cut points are spread evenly and then moved to the quietest ``frame_s`` window
+    within ``search_s`` seconds of the even split, so a chunk boundary falls in a pause rather
+    than in the middle of a word whenever the audio allows it.
+    """
+    path = Path(path)
+    if not path.is_file():
+        raise ProviderError(f"audio file not found: {path}")
+    if max_chunk_s <= 0:
+        raise ProviderError("max_chunk_s must be positive")
+    mono = _load_mono16k(path)
+    target_dir = _workdir(workdir)
+    total = mono.size
+    max_samples = int(max_chunk_s * _TARGET_RATE)
+    count = max(1, -(-total // max_samples)) if total else 1  # ceil division
+    search = int(search_s * _TARGET_RATE)
+    frame = max(1, int(frame_s * _TARGET_RATE))
+    bounds = [0]
+    for index in range(1, count):
+        target = int(round(total * index / count))
+        cut = _quietest_sample(mono, target, search=search, frame=frame)
+        # Keep this chunk and everything after it within the limit.
+        lowest = max(bounds[-1] + 1, total - (count - index) * max_samples)
+        highest = min(total - 1, bounds[-1] + max_samples)
+        bounds.append(min(max(cut, lowest), highest))
+    bounds.append(total)
+    chunks: list[tuple[Path, float]] = []
+    for index, (start, end) in enumerate(zip(bounds[:-1], bounds[1:], strict=True)):
+        if end - start > max_samples:
+            raise ProviderError(
+                f"{path.name}: chunk {index} would be {(end - start) / _TARGET_RATE:.1f}s, over the "
+                f"{max_chunk_s:.0f}s limit; increase search_s or lower max_chunk_s"
+            )
+        dst = target_dir / f"{path.stem}.16k.part{index:02d}.wav"
+        sf.write(str(dst), mono[start:end], _TARGET_RATE, subtype="PCM_16", format="WAV")
+        chunks.append((dst, start / float(_TARGET_RATE)))
+    return chunks
 
 
 def _to_mp3(src: Path, dst: Path) -> None:
@@ -109,4 +173,11 @@ def prepare_upload(path: Path, *, fmt: str, workdir: Path | None = None) -> tupl
     return dst, "audio/mpeg"
 
 
-__all__ = ["UPLOAD_FORMATS", "audio_info", "content_type_for", "ffmpeg_available", "prepare_upload"]
+__all__ = [
+    "UPLOAD_FORMATS",
+    "audio_info",
+    "content_type_for",
+    "ffmpeg_available",
+    "prepare_upload",
+    "split_wav16k",
+]

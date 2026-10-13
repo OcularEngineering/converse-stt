@@ -5,13 +5,23 @@ from __future__ import annotations
 from ocular_evals.config import ConfigError, ModelConfig
 from ocular_evals.providers.base import Hypothesis, Provider, ProviderError
 from ocular_evals.providers.faster_whisper import FasterWhisperProvider
+from ocular_evals.providers.meta import MetaProvider
+from ocular_evals.providers.nemotron_asr import NemotronAsrProvider
 from ocular_evals.providers.omi import OmiProvider
 from ocular_evals.providers.openai_compatible import OpenAICompatibleProvider
+from ocular_evals.providers.openai_realtime import OpenAIRealtimeProvider
+from ocular_evals.providers.reson8 import Reson8Provider
+from ocular_evals.providers.xai import XaiProvider
 
 PROVIDERS: dict[str, type[Provider]] = {
     OpenAICompatibleProvider.key: OpenAICompatibleProvider,
+    OpenAIRealtimeProvider.key: OpenAIRealtimeProvider,
+    XaiProvider.key: XaiProvider,
+    MetaProvider.key: MetaProvider,
+    Reson8Provider.key: Reson8Provider,
     OmiProvider.key: OmiProvider,
     FasterWhisperProvider.key: FasterWhisperProvider,
+    NemotronAsrProvider.key: NemotronAsrProvider,
 }
 
 

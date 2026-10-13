@@ -78,6 +78,9 @@
     .track { position: relative; height: 8px; margin-top: 22px; border-radius: 999px; background: var(--soft); }
     .track > i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--bar, var(--fill)); }
     .track > b { position: absolute; top: 50%; width: 10px; height: 10px; border-radius: 2px; background: var(--mark-color, var(--mark)); transform: translate(-50%, -50%); }
+    .track > b.ghost { width: 2px; height: 16px; border-radius: 1px; background: var(--ghost-color, var(--muted)); opacity: 0.9; }
+    .track.is-muted > i { opacity: 0.45; }
+    .tabnote { margin: -8px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.5; }
     .sub { margin: 8px 0 0; font-size: 12px; }
     .panel { position: sticky; top: 24px; padding-top: 8px; }
     .panel h2 { margin: 0 0 8px; font-size: 28px; font-weight: 500; letter-spacing: -0.03em; }
@@ -117,7 +120,8 @@
       <section>
         <div class="toolbar">
           <div class="views" role="group" aria-label="What to rank">
-            <button class="pill" type="button" id="view-board" aria-pressed="true">1.0 board + 2.0 runs</button>
+            <button class="pill" type="button" id="view-board" aria-pressed="true">Converse-STT 2.0</button>
+            <button class="pill" type="button" id="view-v1" aria-pressed="false">Version 1 models</button>
             <button class="pill" type="button" id="view-run" aria-pressed="false">This sample</button>
             <select class="ghost" id="run-picker" hidden aria-label="Harness model"></select>
           </div>
@@ -126,6 +130,7 @@
             <button class="ghost" type="button" id="scale" aria-pressed="false">Full scale</button>
           </div>
         </div>
+        <p class="tabnote" id="tabnote" hidden></p>
         <div class="cols"><span>Model</span><span id="metric-label">WER</span></div>
         <div class="axis" id="axis-top"></div>
         <ol id="list"></ol>
@@ -139,11 +144,18 @@
     const COLORS = ["#e8ae91","#8eabbf","#c4b48a","#d4a08a","#9bb59a","#b7a3c4","#e0b07a","#8fb8b0","#d08a8a","#a8b07a","#9aa4c4","#c9a48a","#7fafc4","#c4a0b0","#b5a888"];
     const BOARD_SCALE = 15;
     const HAS_BOARD = DATA.published.length > 0;
-    const firstRun = DATA.runs[0] ? DATA.runs[0].id : null;
+    const ALL_RUNS = DATA.allRuns || DATA.runs;
+    const firstRun = DATA.runs[0] ? DATA.runs[0].id : (ALL_RUNS[0] ? ALL_RUNS[0].id : null);
     const state = { view: "board", metric: "wer", scale: BOARD_SCALE, selected: firstRun || (DATA.published[0] && DATA.published[0].name), runId: firstRun };
 
+    function findRun(id) {
+      return ALL_RUNS.find((run) => run.id === id);
+    }
     function activeRun() {
-      return DATA.runs.find((run) => run.id === state.runId) || DATA.runs[0];
+      return findRun(state.runId) || ALL_RUNS[0];
+    }
+    function runRow(run, extra) {
+      return { id: run.id, kind: "run", name: run.name, vendor: run.vendor, wer: run.wer, cer: run.cer, href: run.href, ...extra };
     }
     function value(row) {
       return row[state.metric];
@@ -169,22 +181,23 @@
             place: index + 1,
           }));
       }
-      const published = state.metric === "wer"
-        ? DATA.published.map((model, index) => ({ ...model, id: model.name, kind: "published", order: index }))
-        : [];
-      const combined = [
-        ...published,
-        ...DATA.runs.map((run, index) => ({
-          id: run.id,
-          kind: "run",
-          name: run.name,
-          vendor: run.vendor,
-          wer: run.wer,
-          cer: run.cer,
-          href: run.href,
-          order: DATA.published.length + index,
-        })),
-      ];
+      if (state.view === "v1") {
+        const rerun = [];
+        const only = [];
+        DATA.published.forEach((model, index) => {
+          const run = model.rerun ? findRun(model.rerun) : null;
+          if (run) rerun.push(runRow(run, { kind: "rerun", v1: model, order: index }));
+          else only.push({ ...model, id: model.name, kind: "published", cer: null, order: index });
+        });
+        (DATA.groupExtra || []).forEach((id, index) => {
+          const run = findRun(id);
+          if (run) rerun.push(runRow(run, { kind: "rerun", v1: null, order: DATA.published.length + index }));
+        });
+        rerun.sort((a, b) => value(a) - value(b) || a.order - b.order);
+        only.sort((a, b) => a.wer - b.wer || a.order - b.order);
+        return [...rerun, ...only].map((row, index) => ({ ...row, place: index + 1 }));
+      }
+      const combined = DATA.runs.map((run, index) => runRow(run, { order: index }));
       combined.sort((a, b) => value(a) - value(b) || a.order - b.order);
       return combined.map((row, index) => ({ ...row, place: index + 1 }));
     }
@@ -198,17 +211,29 @@
       }).join("");
     }
 
-    function bar(score, rank, kind) {
-      const width = Math.min(100, Math.max(0, (score / state.scale) * 100));
+    function bar(score, rank, kind, ghost) {
+      const width = Math.min(100, Math.max(0, ((score || 0) / state.scale) * 100));
       const color = kind === "published" ? COLORS[(rank - 1) % COLORS.length] : "var(--ink)";
       const mark = kind === "published" ? color : "var(--mark)";
-      return `<div class="track" style="--bar:${color};--mark-color:${mark}"><i style="width:${width}%"></i><b style="left:${width}%"></b></div>`;
+      const muted = kind === "published" && state.view === "v1" ? " is-muted" : "";
+      const tick = ghost !== undefined && ghost !== null
+        ? `<b class="ghost" style="left:${Math.min(100, Math.max(0, (ghost / state.scale) * 100))}%;--ghost-color:${COLORS[((rank || 1) - 1) % COLORS.length]}" title="Converse-STT 1.0: ${ghost.toFixed(2)}%"></b>`
+        : "";
+      return `<div class="track${muted}" style="--bar:${color};--mark-color:${mark}"><i style="width:${width}%"></i><b style="left:${width}%"></b>${tick}</div>`;
     }
 
     function subtitle(row) {
       const clipped = state.scale < value(row) ? " Above the axis." : "";
+      if (row.kind === "rerun") {
+        const run = findRun(row.id);
+        const other = state.metric === "wer" ? `CER ${pct(run.cer)}` : `WER ${pct(run.wer)}`;
+        if (!row.v1) return `2.0 harness · ${other} · ${run.numerator.toLocaleString()} / ${run.denominator.toLocaleString()} words.${clipped}`;
+        const delta = run.wer - row.v1.wer;
+        const sign = delta > 0 ? "+" : "−";
+        return `${DATA.board.label || "1.0"}: ${row.v1.wer.toFixed(2)}% · rank ${String(row.v1.rank).padStart(2, "0")} → 2.0 harness ${pct(run.wer)} (${sign}${Math.abs(delta).toFixed(2)}) · ${other}.${clipped}`;
+      }
       if (row.kind === "run") {
-        const run = DATA.runs.find((item) => item.id === row.id);
+        const run = findRun(row.id);
         const other = state.metric === "wer" ? `CER ${pct(run.cer)}` : `WER ${pct(run.wer)}`;
         const partial = run.tracks < run.tracksTotal ? ` · ${run.tracks}/${run.tracksTotal} tracks` : ` · ${run.tracks} tracks`;
         return `${DATA.sampleLabel} · ${other}${partial} · ${run.numerator.toLocaleString()} / ${run.denominator.toLocaleString()} words.${clipped}`;
@@ -217,8 +242,13 @@
         const other = state.metric === "wer" ? `CER ${pct(row.cer)}` : `WER ${pct(row.wer)}`;
         return `${row.complete ? "Both speaker tracks, errors summed" : "Incomplete: not every track was transcribed"} · ${other}.${clipped}`;
       }
+      const blocked = row.blocked ? ` · not re-run in 2.0: ${row.blocked}` : "";
+      if (state.view === "v1") {
+        const pipecatNote = row.pipecat !== undefined ? ` · Pipecat ${row.pipecat.toFixed(2)}% (rank ${String(row.pipecatRank).padStart(2, "0")})` : "";
+        return `${DATA.board.label || "Published"}: ${row.wer.toFixed(2)}% · rank ${String(row.rank).padStart(2, "0")}${pipecatNote}${blocked}`;
+      }
       const pipecat = row.pipecat !== undefined ? `Pipecat ${row.pipecat.toFixed(2)}% · rank ${String(row.pipecatRank).padStart(2, "0")} → ${String(row.rank).padStart(2, "0")}` : `${DATA.board.label || "Published"} · rank ${String(row.rank).padStart(2, "0")}`;
-      return pipecat;
+      return pipecat + blocked;
     }
 
     function renderList() {
@@ -227,6 +257,14 @@
       document.getElementById("metric-label").textContent = state.metric.toUpperCase();
       const list = document.getElementById("list");
       const items = rows();
+      const note = document.getElementById("tabnote");
+      if (state.view === "v1") {
+        const rerun = items.filter((row) => row.kind === "rerun").length;
+        note.hidden = false;
+        note.textContent = `The ${DATA.published.length} models scored in ${DATA.board.name || "Converse-STT 1.0"} (${DATA.board.updated || ""}, ${DATA.board.label || "published"}), re-run on the same recordings with the 2.0 harness where the credentials allow: ${rerun} of ${DATA.published.length} so far. Bars are 2.0 harness scores (the same runs are ranked on the Converse-STT 2.0 tab); the thin tick is the 1.0 figure. Models without a 2.0 run show their 1.0 bar, dimmed.`;
+      } else {
+        note.hidden = true;
+      }
       if (!items.length) {
         list.innerHTML = `<li class="row"><p class="empty" style="padding:22px 0">Nothing to rank yet. Score a run and rebuild this page.</p></li>`;
         return;
@@ -240,7 +278,7 @@
                 <p><span class="name">${escapeHtml(row.name)}</span> <span class="vendor">(${escapeHtml(row.vendor)})</span></p>
                 <span class="score">${pct(value(row))}</span>
               </span>
-              ${bar(value(row), row.kind === "published" ? row.rank : row.place, row.kind)}
+              ${bar(value(row), row.kind === "published" ? row.rank : (row.v1 ? row.v1.rank : row.place), row.kind, row.kind === "rerun" && row.v1 && state.metric === "wer" ? row.v1.wer : null)}
               <p class="sub">${escapeHtml(subtitle(row))}</p>
             </span>
           </button>
@@ -248,7 +286,7 @@
       list.querySelectorAll("button.hit").forEach((button) => {
         button.addEventListener("click", () => {
           state.selected = button.dataset.id;
-          if (button.dataset.kind === "run") state.runId = button.dataset.id;
+          if (button.dataset.kind === "run" || button.dataset.kind === "rerun") state.runId = button.dataset.id;
           render();
         });
       });
@@ -293,7 +331,7 @@
           <p class="eyebrow">${escapeHtml(DATA.board.label || "Published score")}</p>
           <h2>${escapeHtml(selected.name)}</h2>
           <p class="meta">${escapeHtml(selected.vendor)} · rank ${String(selected.rank).padStart(2, "0")} on the Hi-Fi conversations${pipecat}.</p>
-          <p>This row is the ${escapeHtml(DATA.board.updated || "published")} ${escapeHtml(DATA.board.name || "Converse-STT")} figure. The 2.0 harness has not rerun it, so there is no per-conversation breakdown or CER here.</p>
+          <p>This row is the ${escapeHtml(DATA.board.updated || "published")} ${escapeHtml(DATA.board.name || "Converse-STT")} figure. The 2.0 harness has not re-run it${selected.blocked ? ` (${escapeHtml(selected.blocked)})` : ""}, so there is no per-conversation breakdown or CER here.</p>
           ${selected.href ? `<p><a href="${escapeAttr(selected.href)}">Model site</a></p>` : ""}`;
         return;
       }
@@ -307,12 +345,14 @@
           ${item.channels.map((channel) => channelBlock(channel, run.name)).join("")}`;
         return;
       }
-      const run = DATA.runs.find((item) => item.id === selected.id);
+      const run = findRun(selected.id);
       const looped = run.conversations.some((item) => item.channels.some((channel) => channel.repeated));
+      const v1 = selected.kind === "rerun" && selected.v1 ? `<p class="meta">${escapeHtml(DATA.board.label || "Converse-STT 1.0")}: ${selected.v1.wer.toFixed(2)}% WER, rank ${String(selected.v1.rank).padStart(2, "0")} of ${DATA.published.length}. Same four recordings; different pipeline and normalization, so the two figures are indicative, not interchangeable.</p>` : "";
       panel.innerHTML = `
-        <p class="eyebrow">${escapeHtml(DATA.sampleLabel)}</p>
+        <p class="eyebrow">${escapeHtml(run.group ? (DATA.board.name || run.group) + " model · 2.0 harness" : DATA.sampleLabel)}</p>
         <h2>${escapeHtml(run.name)}</h2>
-        <p class="meta">WER ${pct(run.wer)} · ${run.numerator.toLocaleString()} errors / ${run.denominator.toLocaleString()} reference words<br>CER ${pct(run.cer)} · ${run.cerNumerator.toLocaleString()} errors / ${run.cerDenominator.toLocaleString()} characters<br>${escapeHtml(run.modelId)} · ${escapeHtml(run.profile)} normalization</p>
+        <p class="meta">WER ${pct(run.wer)} · ${run.numerator.toLocaleString()} errors / ${run.denominator.toLocaleString()} reference words<br>CER ${pct(run.cer)} · ${run.cerNumerator.toLocaleString()} errors / ${run.cerDenominator.toLocaleString()} characters<br>${escapeHtml(run.modelId)} · ${escapeHtml(run.profile)} normalization${run.notes ? ` · ${escapeHtml(run.notes)}` : ""}</p>
+        ${v1}
         <p>${looped ? "A repeated short phrase means the decode looped instead of following that speaker." : `Open a conversation to read the reference beside the transcript.${HAS_BOARD ? " This sample has no Pipecat score." : ""}`}</p>
         ${run.href ? `<p><a href="${escapeAttr(run.href)}">Model site</a></p>` : ""}
         ${run.conversations.map((item) => `
@@ -324,17 +364,18 @@
 
     function renderStats() {
       const lede = HAS_BOARD
-        ? `How accurately speech-to-text models transcribe real two-person American English conversations. Word and character error rate on the Ocular AI Hi-Fi recordings; a lower score is a more accurate transcript. ${DATA.board.label || "Published"} figures sit beside 2.0 harness runs from ${DATA.generated}.`
+        ? `How accurately speech-to-text models transcribe real two-person American English conversations. Word and character error rate on the Ocular AI Hi-Fi recordings; a lower score is a more accurate transcript. Every row on the 2.0 board is an independent harness run; the Version 1 tab re-runs the ${DATA.board.name || "1.0"} models beside their ${DATA.board.label || "published"} figures. Page built ${DATA.generated}.`
         : `How accurately speech-to-text models transcribe real two-person American English conversations. Word and character error rate on the Ocular AI Hi-Fi recordings; a lower score is a more accurate transcript. Every row is an independent 2.0 harness run; page built ${DATA.generated}.`;
       document.getElementById("lede").textContent = lede;
       const complete = DATA.runs.filter((run) => run.tracks === run.tracksTotal && run.wer !== null);
       const best = [...complete].sort((a, b) => a.wer - b.wer)[0];
       const bestCer = [...complete].sort((a, b) => a.cer - b.cer)[0];
       const sample = DATA.runs[0];
-      const stats = [[String(DATA.published.length + DATA.runs.length), "Models on this page"]];
+      const stats = [[String(DATA.runs.length), "Systems on the 2.0 board"]];
+      if (HAS_BOARD) stats.push([`${DATA.published.filter((model) => model.rerun && findRun(model.rerun)).length} / ${DATA.published.length}`, `${DATA.board.name || "1.0"} models re-run in 2.0`]);
       if (best) stats.push([pct(best.wer), `Lowest WER · ${best.name}`]);
       if (bestCer) stats.push([pct(bestCer.cer), `Lowest CER · ${bestCer.name}`]);
-      if (sample) stats.push([sample.denominator.toLocaleString(), `Reference words · ${sample.conversations.length} conversations`]);
+      if (sample && stats.length < 4) stats.push([sample.denominator.toLocaleString(), `Reference words · ${sample.conversations.length} conversations`]);
       document.getElementById("stats").innerHTML = stats
         .map(([valueText, label]) => `<div class="stat"><strong>${valueText}</strong><span>${escapeHtml(label)}</span></div>`).join("");
     }
@@ -370,6 +411,7 @@
     }
     function setPressed() {
       document.getElementById("view-board").setAttribute("aria-pressed", String(state.view === "board"));
+      document.getElementById("view-v1").setAttribute("aria-pressed", String(state.view === "v1"));
       document.getElementById("view-run").setAttribute("aria-pressed", String(state.view === "run"));
       const metric = document.getElementById("metric");
       metric.setAttribute("aria-pressed", String(state.metric === "cer"));
@@ -377,7 +419,7 @@
     }
 
     const picker = document.getElementById("run-picker");
-    picker.innerHTML = DATA.runs.map((run) => `<option value="${escapeAttr(run.id)}">${escapeHtml(run.name)}</option>`).join("");
+    picker.innerHTML = ALL_RUNS.map((run) => `<option value="${escapeAttr(run.id)}">${escapeHtml(run.name)}${run.group ? ` (${DATA.board.name || run.group})` : ""}</option>`).join("");
     picker.addEventListener("change", () => {
       state.runId = picker.value;
       state.selected = bestConversation();
@@ -386,13 +428,22 @@
     });
     document.getElementById("view-board").addEventListener("click", () => {
       state.view = "board";
-      state.selected = state.runId;
+      state.selected = DATA.runs.some((run) => run.id === state.runId) ? state.runId : (DATA.runs[0] ? DATA.runs[0].id : null);
+      setScale(BOARD_SCALE);
+      setPressed();
+      render();
+    });
+    document.getElementById("view-v1").addEventListener("click", () => {
+      state.view = "v1";
+      const first = rows()[0];
+      state.selected = first ? first.id : null;
+      if (first && first.kind === "rerun") state.runId = first.id;
       setScale(BOARD_SCALE);
       setPressed();
       render();
     });
     document.getElementById("view-run").addEventListener("click", () => {
-      if (!DATA.runs.length) return;
+      if (!ALL_RUNS.length) return;
       state.view = "run";
       state.selected = bestConversation();
       setScale(fullScale());
@@ -401,7 +452,7 @@
     });
     document.getElementById("metric").addEventListener("click", () => {
       state.metric = state.metric === "wer" ? "cer" : "wer";
-      if (state.view === "board" && state.metric === "cer" && DATA.runs.length) state.selected = state.runId;
+      if (state.view !== "run" && state.metric === "cer" && ALL_RUNS.length) state.selected = state.runId;
       setScale(state.scale === BOARD_SCALE ? BOARD_SCALE : fullScale());
       setPressed();
       render();
@@ -410,10 +461,11 @@
       setScale(state.scale === BOARD_SCALE ? fullScale() : BOARD_SCALE);
       render();
     });
-    if (!DATA.runs.length) document.getElementById("view-run").disabled = true;
+    if (!ALL_RUNS.length) document.getElementById("view-run").disabled = true;
     if (!HAS_BOARD) {
       document.getElementById("view-board").textContent = "Models";
       document.getElementById("view-run").textContent = "Conversations";
+      document.getElementById("view-v1").hidden = true;
     }
     setPressed();
     renderStats();

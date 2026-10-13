@@ -28,6 +28,7 @@ DEFAULT_REPORT = Path("reports/converse-stt.html")
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
 OPENROUTER_KEY_ENV = "OPENROUTER_API_KEY"
 MP3_UPLOAD_HOSTS = ("api.openai.com", "openrouter.ai")
+LOCAL_PROVIDERS = frozenset({"faster-whisper", "nemotron-asr"})  # run on this machine; no API key
 
 
 def _fail(message: str) -> int:
@@ -197,7 +198,7 @@ def cmd_models_add(args: argparse.Namespace) -> int:
             key_env = args.key_env or suggest_env_name(args.name)
     elif args.key_env:
         key_env = args.key_env
-    elif provider_key != "faster-whisper":
+    elif provider_key not in LOCAL_PROVIDERS:
         return _fail("--key is required: either the secret itself or the NAME of the variable that holds it in .env")
 
     options = _parse_options(args.option)
@@ -219,6 +220,7 @@ def cmd_models_add(args: argparse.Namespace) -> int:
             display_name=args.display_name,
             href=args.href,
             notes=args.notes,
+            group=args.group,
             options=options or None,
             replace=args.replace,
         )
@@ -453,11 +455,25 @@ def build_parser() -> argparse.ArgumentParser:
     add.add_argument("--key", help="the API key, or the NAME of the .env variable holding it, or '-' for stdin")
     add.add_argument("--key-env", help="variable name to store a literal --key under (default: <VENDOR>_API_KEY)")
     add.add_argument("--model", help="model id sent to the API when it differs from the name")
-    add.add_argument("--provider", choices=("openai-compatible", "omi", "faster-whisper"), default=None)
+    add.add_argument(
+        "--provider",
+        choices=(
+            "openai-compatible",
+            "openai-realtime",
+            "xai",
+            "meta",
+            "reson8",
+            "omi",
+            "faster-whisper",
+            "nemotron-asr",
+        ),
+        default=None,
+    )
     add.add_argument("--vendor", help="shown on the leaderboard, e.g. OpenAI")
     add.add_argument("--display-name", help="shown on the leaderboard, e.g. 'GPT-4o mini Transcribe'")
     add.add_argument("--href", help="link for the leaderboard row")
     add.add_argument("--notes")
+    add.add_argument("--group", help="leaderboard tab for the run, e.g. converse-stt-1.0 (default: the 2.0 board)")
     add.add_argument(
         "--upload",
         choices=("flac", "wav16k", "mp3"),

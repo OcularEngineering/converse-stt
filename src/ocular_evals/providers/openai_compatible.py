@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import os
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -12,13 +13,20 @@ from typing import Any
 import httpx
 
 from ocular_evals.config import ModelConfig
-from ocular_evals.providers.audio import UPLOAD_FORMATS, ffmpeg_available, prepare_upload
+from ocular_evals.env import redact
+from ocular_evals.providers.audio import UPLOAD_FORMATS, ffmpeg_available, prepare_upload, split_wav16k
 from ocular_evals.providers.base import Hypothesis, Provider, ProviderError, coerce_segments, primary_language_tag
 from ocular_evals.providers.http import error_from_response, send_with_retry
 
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_API_KEY_ENV = "OPENAI_API_KEY"
 RESPONSE_FORMATS = ("json", "verbose_json", "text")
+
+
+def _is_number(value: Any, *, minimum: float, exclusive: bool = False) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        return False
+    return value > minimum if exclusive else value >= minimum
 
 
 class OpenAICompatibleProvider(Provider):
@@ -33,6 +41,10 @@ class OpenAICompatibleProvider(Provider):
             "temperature",
             "prompt",
             "send_language",
+            "chunking_strategy",
+            "timestamp_granularities",
+            "chunk_s",
+            "search_s",
         }
     )
 
@@ -47,6 +59,17 @@ class OpenAICompatibleProvider(Provider):
         self.temperature = options.get("temperature")
         self.prompt = options.get("prompt")
         self.send_language = bool(options.get("send_language", True))
+        # OpenAI: "auto" makes the server cut long audio at voice-activity boundaries instead of
+        # decoding one 15-minute window, which the gpt-4o-transcribe models otherwise truncate.
+        self.chunking_strategy = options.get("chunking_strategy")
+        # Mistral: asking for segment timestamps makes the server decode segment by segment, which
+        # avoids the runaway repetition Voxtral otherwise falls into on some 15-minute tracks.
+        self.timestamp_granularities = options.get("timestamp_granularities")
+        # Client-side chunking for endpoints that cap request duration or size (Chirp 3: 60 s per
+        # request; AssemblyAI through OpenRouter: a few MB). Each chunk is cut at a pause, sent as
+        # its own request in the configured upload format, and the transcripts are joined in order.
+        self.chunk_s = options.get("chunk_s")
+        self.search_s = options.get("search_s", 5.0)
         self._client = client
         self._owns_client = client is None
         self._workdir: Path | None = None
@@ -79,6 +102,18 @@ class OpenAICompatibleProvider(Provider):
             problems.append("temperature must be a number between 0 and 1")
         if self.prompt is not None and not isinstance(self.prompt, str):
             problems.append("prompt must be a string")
+        if self.chunking_strategy is not None and not isinstance(self.chunking_strategy, str):
+            problems.append('chunking_strategy must be a string such as "auto"')
+        granularities = self.timestamp_granularities
+        if granularities is not None and not (
+            isinstance(granularities, str)
+            or (isinstance(granularities, list) and all(isinstance(item, str) for item in granularities))
+        ):
+            problems.append('timestamp_granularities must be a string or list of strings such as "segment"')
+        if self.chunk_s is not None and not _is_number(self.chunk_s, minimum=0, exclusive=True):
+            problems.append("chunk_s must be a positive number of seconds")
+        if not _is_number(self.search_s, minimum=0):
+            problems.append("search_s must be zero or a positive number of seconds")
         if not self.base_url.startswith(("http://", "https://")):
             problems.append(f"base_url must start with http:// or https://; got {self.base_url!r}")
         return problems
@@ -102,14 +137,19 @@ class OpenAICompatibleProvider(Provider):
             parameters["temperature"] = self.temperature
         if self.prompt:
             parameters["prompt"] = self.prompt
+        if self.chunking_strategy:
+            parameters["chunking_strategy"] = self.chunking_strategy
+        if self.timestamp_granularities:
+            parameters["timestamp_granularities"] = self.timestamp_granularities
         return parameters
 
-    def transcribe(self, audio: Path, *, language: str) -> Hypothesis:
-        if self.upload != "flac" and self._workdir is None:
-            self._workdir = Path(tempfile.mkdtemp(prefix="ocular-evals-"))
-        upload_path, content_type = prepare_upload(audio, fmt=self.upload, workdir=self._workdir)
-        parameters = self._parameters(language)
-        form = {key: str(value) for key, value in parameters.items()}
+    def _request(self, upload_path: Path, content_type: str, parameters: dict[str, Any]) -> tuple[Hypothesis, dict]:
+        """POST one file and parse the answer. Returns the hypothesis and the per-request ``raw`` record."""
+        # httpx sends a list value as one repeated field per item.
+        form = {
+            key: [str(item) for item in value] if isinstance(value, list) else str(value)
+            for key, value in parameters.items()
+        }
         headers = {"Authorization": f"Bearer {self._api_key()}"}
         client = self._get_client()
         url = self.endpoint
@@ -125,7 +165,7 @@ class OpenAICompatibleProvider(Provider):
                 )
 
         response = send_with_retry(send)
-        raw = {
+        raw: dict[str, Any] = {
             "endpoint": url,
             "parameters": parameters,
             "upload": {"format": self.upload, "content_type": content_type, "bytes": upload_path.stat().st_size},
@@ -143,7 +183,7 @@ class OpenAICompatibleProvider(Provider):
         if request_id:
             raw["request_id"] = request_id
         if self.response_format == "text":
-            return Hypothesis(text=response.text.strip(), language=parameters.get("language"), raw=raw)
+            return Hypothesis(text=response.text.strip(), language=parameters.get("language"), raw=raw), raw
         try:
             data = response.json()
         except ValueError as exc:
@@ -158,7 +198,7 @@ class OpenAICompatibleProvider(Provider):
             else:
                 raise ProviderError(f"{url} response lacks a `text` field")
         duration = data.get("duration")
-        return Hypothesis(
+        hypothesis = Hypothesis(
             text=text.strip(),
             language=data.get("language") if isinstance(data.get("language"), str) else parameters.get("language"),
             duration_s=float(duration)
@@ -166,6 +206,64 @@ class OpenAICompatibleProvider(Provider):
             else None,
             segments=segments,
             raw=raw,
+        )
+        return hypothesis, raw
+
+    def transcribe(self, audio: Path, *, language: str) -> Hypothesis:
+        if (self.upload != "flac" or self.chunk_s) and self._workdir is None:
+            self._workdir = Path(tempfile.mkdtemp(prefix="ocular-evals-"))
+        parameters = self._parameters(language)
+        if not self.chunk_s:
+            upload_path, content_type = prepare_upload(audio, fmt=self.upload, workdir=self._workdir)
+            hypothesis, _ = self._request(upload_path, content_type, parameters)
+            return hypothesis
+
+        chunks = split_wav16k(
+            audio, max_chunk_s=float(self.chunk_s), search_s=float(self.search_s), workdir=self._workdir
+        )
+        texts: list[str] = []
+        segments: list[dict] = []
+        parts: list[dict[str, Any]] = []
+        total_duration = 0.0
+        detected: str | None = None
+        for index, (chunk, start_s) in enumerate(chunks):
+            if len(chunks) > 1:
+                print(
+                    redact(f"{self.key}: {audio.name} chunk {index + 1}/{len(chunks)} from {start_s:.1f}s"),
+                    file=sys.stderr,
+                )
+            # "flac" means "send the source as is"; for a WAV chunk that is the WAV itself.
+            upload_path, content_type = prepare_upload(chunk, fmt=self.upload, workdir=self._workdir)
+            piece, raw = self._request(upload_path, content_type, parameters)
+            if piece.text:
+                texts.append(piece.text)
+            for segment in piece.segments:
+                segments.append(
+                    {
+                        "start_s": start_s + segment["start_s"] if segment["start_s"] is not None else None,
+                        "end_s": start_s + segment["end_s"] if segment["end_s"] is not None else None,
+                        "text": segment["text"],
+                    }
+                )
+            if piece.duration_s is not None:
+                total_duration += piece.duration_s
+            detected = detected or piece.language
+            parts.append(
+                {"start_s": round(start_s, 3), "bytes": raw["upload"]["bytes"], "request_id": raw.get("request_id")}
+            )
+            if upload_path != chunk:
+                upload_path.unlink(missing_ok=True)
+            chunk.unlink(missing_ok=True)
+        return Hypothesis(
+            text=" ".join(texts).strip(),
+            language=detected or parameters.get("language"),
+            duration_s=total_duration or None,
+            segments=tuple(segments),
+            raw={
+                "endpoint": self.endpoint,
+                "parameters": parameters,
+                "upload": {"format": self.upload, "chunk_s": self.chunk_s, "chunks": parts},
+            },
         )
 
     def close(self) -> None:

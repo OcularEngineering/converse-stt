@@ -50,6 +50,7 @@ class ModelConfig:
     options: dict[str, Any] = field(default_factory=dict)
     href: str | None = None
     notes: str | None = None
+    group: str | None = None  # leaderboard tab, e.g. "converse-stt-1.0"; None = the 2.0 board
     source: str = "<memory>"
 
     def to_dict(self) -> dict[str, Any]:
@@ -63,6 +64,7 @@ class ModelConfig:
             "options": dict(self.options),
             "href": self.href,
             "notes": self.notes,
+            "group": self.group,
         }
 
     def digest(self) -> str:
@@ -130,6 +132,7 @@ def parse_model_config(text: str, *, source: str = "<memory>") -> ModelConfig:
         options=dict(options),
         href=data.get("href"),
         notes=data.get("notes"),
+        group=str(data["group"]) if data.get("group") else None,
         source=source,
     )
 
