@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ocular_evals.config import ConfigError, ModelConfig
 from ocular_evals.providers.base import Hypothesis, Provider, ProviderError
+from ocular_evals.providers.cohere_transcribe import CohereTranscribeProvider
 from ocular_evals.providers.faster_whisper import FasterWhisperProvider
 from ocular_evals.providers.meta import MetaProvider
 from ocular_evals.providers.nemotron_asr import NemotronAsrProvider
@@ -22,6 +23,7 @@ PROVIDERS: dict[str, type[Provider]] = {
     OmiProvider.key: OmiProvider,
     FasterWhisperProvider.key: FasterWhisperProvider,
     NemotronAsrProvider.key: NemotronAsrProvider,
+    CohereTranscribeProvider.key: CohereTranscribeProvider,
 }
 
 

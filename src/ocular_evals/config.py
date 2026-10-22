@@ -51,6 +51,7 @@ class ModelConfig:
     href: str | None = None
     notes: str | None = None
     group: str | None = None  # leaderboard tab, e.g. "converse-stt-1.0"; None = the 2.0 board
+    prerelease: bool = False  # pre-release deployment: `export` leaves the run out unless asked to include it
     source: str = "<memory>"
 
     def to_dict(self) -> dict[str, Any]:
@@ -65,6 +66,7 @@ class ModelConfig:
             "href": self.href,
             "notes": self.notes,
             "group": self.group,
+            "prerelease": self.prerelease,
         }
 
     def digest(self) -> str:
@@ -121,6 +123,9 @@ def parse_model_config(text: str, *, source: str = "<memory>") -> ModelConfig:
         env = [env]
     if not isinstance(env, list) or not all(isinstance(item, str) for item in env):
         raise ConfigError(f"{source}: env must be a list of variable names")
+    prerelease = data.get("prerelease", False)
+    if not isinstance(prerelease, bool):
+        raise ConfigError(f"{source}: prerelease must be true or false")
 
     return ModelConfig(
         name=name,
@@ -133,6 +138,7 @@ def parse_model_config(text: str, *, source: str = "<memory>") -> ModelConfig:
         href=data.get("href"),
         notes=data.get("notes"),
         group=str(data["group"]) if data.get("group") else None,
+        prerelease=prerelease,
         source=source,
     )
 

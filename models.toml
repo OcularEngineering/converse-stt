@@ -157,6 +157,16 @@ notes = "local (Transformers), lookahead 1.12 s, language en-US"
 lookahead_frames = 13
 language = "en-US"
 
+[cohere-transcribe]
+provider = "cohere-transcribe"
+model = "CohereLabs/cohere-transcribe-03-2026"
+vendor = "Cohere"
+display_name = "Cohere Transcribe"
+href = "https://huggingface.co/CohereLabs/cohere-transcribe-03-2026"
+notes = "open weights, run locally (Transformers); model's own 35 s energy-based pieces; pieces peaking below -35 dBFS skipped (the model card's recommended noise gate)"
+batch_size = 4
+skip_silence_dbfs = -35
+
 [qwen3-asr-1-7b]
 url = "https://openrouter.ai/api/v1"
 key = "OPENROUTER_API_KEY"

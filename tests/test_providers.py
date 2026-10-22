@@ -13,6 +13,7 @@ import soundfile as sf
 from ocular_evals.config import ModelConfig
 from ocular_evals.providers import PROVIDERS, Hypothesis, ProviderError, create_provider
 from ocular_evals.providers.audio import audio_info, content_type_for, prepare_upload, split_wav16k
+from ocular_evals.providers.cohere_transcribe import CohereTranscribeProvider
 from ocular_evals.providers.faster_whisper import FasterWhisperProvider
 from ocular_evals.providers.http import error_from_response, send_with_retry
 from ocular_evals.providers.meta import MetaProvider
@@ -96,6 +97,7 @@ def test_registry_exposes_every_provider():
         "omi",
         "faster-whisper",
         "nemotron-asr",
+        "cohere-transcribe",
     }
     assert isinstance(create_provider(_config("omi", "omi-general-1")), OmiProvider)
     assert isinstance(create_provider(_config("xai", "grok-voice-transcribe-2.0")), XaiProvider)
@@ -1213,3 +1215,148 @@ def test_openai_realtime_transcribe_joins_turns_in_order(monkeypatch: pytest.Mon
     assert hypothesis.segments[0] == {"start_s": 0.0, "end_s": 0.9, "text": "First turn,"}
     assert hypothesis.segments[1]["end_s"] is None
     assert hypothesis.raw["turns"] == 2 and hypothesis.raw["model"] == "whisper-1"
+
+
+# --- cohere-transcribe ----------------------------------------------------------
+
+
+def test_cohere_check_mentions_extra_and_validates_options(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setitem(sys.modules, "transformers", None)
+    provider = CohereTranscribeProvider(
+        _config(
+            "cohere-transcribe",
+            "CohereLabs/cohere-transcribe-03-2026",
+            device="tpu",
+            dtype="int8",
+            batch_size=0,
+            max_new_tokens="many",
+            punctuation="yes",
+            skip_silence_dbfs="quiet",
+            extra=1,
+        )
+    )
+
+    problems = provider.check()
+
+    assert any("uv sync --extra nemotron" in item for item in problems)
+    for key in ("device", "dtype", "batch_size", "max_new_tokens", "punctuation", "skip_silence_dbfs", "extra"):
+        assert any(key in item for item in problems), key
+    clean = CohereTranscribeProvider(
+        _config("cohere-transcribe", "CohereLabs/cohere-transcribe-03-2026", device="cpu", skip_silence_dbfs=-60)
+    )
+    assert [item for item in clean.check() if "uv sync" not in item] == []
+    with pytest.raises(ProviderError, match="nemotron"):
+        clean.transcribe(Path("missing.flac"), language="en")
+
+
+def test_cohere_transcribe_with_fake_model(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    captured: dict[str, Any] = {"batches": [], "languages": set(), "punctuation": set()}
+
+    class Batch(dict):
+        def to(self, device):
+            captured["device"] = device
+            return self
+
+    class Tokenizer:
+        def batch_decode(self, output, skip_special_tokens):
+            return [f"piece {i}" for i in output]
+
+    class Extractor:
+        @staticmethod
+        def _split_audio_chunks_energy(waveform):
+            # Fixed 10 s pieces, like the model's 35 s splitter but shorter for the test.
+            step = 10 * 16000
+            return [waveform[i : i + step] for i in range(0, len(waveform), step)]
+
+    class Processor:
+        feature_extractor = Extractor()
+        tokenizer = Tokenizer()
+
+        def __call__(self, audio, sampling_rate, return_tensors, language, punctuation):
+            captured["batches"].append(len(audio))
+            captured["languages"].add(language)
+            captured["punctuation"].add(punctuation)
+            index = [(i, None) for i in range(len(audio))]
+            return Batch(input_features=FakeTensor(len(audio)), audio_chunk_index=index)
+
+    class FakeTensor:
+        def __init__(self, n: int) -> None:
+            self.n = n
+
+        def to(self, dtype):
+            return self
+
+    class Model:
+        dtype = "bf16"
+
+        def to(self, device):
+            return self
+
+        def eval(self):
+            return self
+
+        def generate(self, input_features, max_new_tokens, **kwargs):
+            captured["max_new_tokens"] = max_new_tokens
+            base = sum(captured["batches"][:-1])
+            return [base + i for i in range(input_features.n)]
+
+    class Torch:
+        float32 = "torch.float32"
+        bfloat16 = "torch.bfloat16"
+
+        class backends:
+            class mps:
+                @staticmethod
+                def is_available() -> bool:
+                    return False
+
+        class cuda:
+            @staticmethod
+            def is_available() -> bool:
+                return False
+
+        @staticmethod
+        def from_numpy(array):
+            return array
+
+        @staticmethod
+        def inference_mode():
+            import contextlib
+
+            return contextlib.nullcontext()
+
+    monkeypatch.setattr(
+        "ocular_evals.providers.cohere_transcribe._import_transformers",
+        lambda: (
+            Torch,
+            type("M", (), {"from_pretrained": staticmethod(lambda *a, **k: Model())}),
+            type("P", (), {"from_pretrained": staticmethod(lambda *a, **k: Processor())}),
+        ),
+    )
+    # 50 s: 20 s of tone, 10 s of digital silence, 20 s of tone -> 5 pieces, the middle one silent.
+    tone = (0.1 * np.sin(np.arange(20 * 16000) * 0.05)).astype(np.float32)
+    samples = np.concatenate([tone, np.zeros(10 * 16000, dtype=np.float32), tone])
+    path = tmp_path / "long.flac"
+    sf.write(str(path), samples, 16000, format="FLAC")
+    provider = CohereTranscribeProvider(
+        _config("cohere-transcribe", "CohereLabs/cohere-transcribe-03-2026", batch_size=2, skip_silence_dbfs=-60)
+    )
+
+    hypothesis = provider.transcribe(path, language="en-US")
+
+    # The silent piece (index 2) is skipped; the other four are sent in batches of 2 and renumbered 0..3.
+    assert captured["batches"] == [2, 2]
+    assert hypothesis.text == "piece 0 piece 1 piece 2 piece 3"
+    assert len(hypothesis.segments) == 5 and hypothesis.segments[2]["text"] == ""
+    assert hypothesis.segments[1] == {"start_s": 10.0, "end_s": 20.0, "text": "piece 1"}
+    assert captured["languages"] == {"en"} and captured["punctuation"] == {True}
+    assert captured["device"] == "cpu" and captured["max_new_tokens"] == 256
+    assert hypothesis.raw["dtype"] == "float32" and hypothesis.raw["pieces_skipped_as_silence"] == 1
+    assert hypothesis.language == "en" and hypothesis.duration_s == pytest.approx(50.0)
+
+    everything = CohereTranscribeProvider(
+        _config("cohere-transcribe", "CohereLabs/cohere-transcribe-03-2026", batch_size=8)
+    )
+    captured["batches"].clear()
+    assert everything.transcribe(path, language="en").raw["pieces_skipped_as_silence"] == 0
+    assert captured["batches"] == [5], "without a silence gate every piece is transcribed"

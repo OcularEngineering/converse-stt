@@ -8,8 +8,9 @@ the OpenAI ``/audio/transcriptions`` protocol takes two lines::
     key = "OPENAI_API_KEY"            # name of the variable in .env
 
 Everything else is optional: ``model`` (defaults to the table name), ``vendor``,
-``display_name``, ``href``, ``notes``, ``provider`` (defaults to
-``openai-compatible``) and an ``[name.options]`` table for provider options.
+``display_name``, ``href``, ``notes``, ``group``, ``prerelease`` (``true`` keeps the run
+out of ``ocular-evals export``), ``provider`` (defaults to ``openai-compatible``) and an
+``[name.options]`` table for provider options.
 Secrets never live in this file; ``key`` names the environment variable.
 """
 
@@ -30,7 +31,19 @@ _ENV_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
 _TRANSCRIPTIONS_SUFFIX = "/audio/transcriptions"
 
 _FIELD_ALIASES = {"url": "base_url", "key": "api_key_env"}
-_TOP_LEVEL = {"name", "display_name", "vendor", "provider", "model", "env", "href", "notes", "group", "options"}
+_TOP_LEVEL = {
+    "name",
+    "display_name",
+    "vendor",
+    "provider",
+    "model",
+    "env",
+    "href",
+    "notes",
+    "group",
+    "prerelease",
+    "options",
+}
 
 
 def registry_path(path: Path | None = None) -> Path:
@@ -104,6 +117,8 @@ def _config_dict_to_toml(data: dict[str, Any]) -> str:
     for field in ("name", "display_name", "vendor", "provider", "model", "env", "href", "notes", "group"):
         if field in data and data[field] not in (None, "", []):
             lines.append(f"{field} = {_toml_scalar(data[field])}")
+    if data.get("prerelease") is True:
+        lines.append("prerelease = true")
     options = data.get("options") or {}
     if options:
         lines.append("")

@@ -2,8 +2,29 @@ from __future__ import annotations
 
 import pytest
 
-from ocular_evals.metrics import EditCounts, align, primary_metric, score_text, tokenize
+from ocular_evals.metrics import EditCounts, align, alignment_ops, primary_metric, score_text, tokenize
 from ocular_evals.text import normalize, punctuation_to_spaces, strip_markup
+
+
+def replay_ops(ops: list[tuple[str, int]]) -> tuple[int, int, EditCounts]:
+    """Walk the runs and report how many reference and hypothesis tokens they consume, plus the edit counts."""
+    ref_used = hyp_used = 0
+    counts = EditCounts()
+    for op, count in ops:
+        assert op in {"e", "s", "d", "i"} and count > 0
+        if op == "e":
+            counts += EditCounts(hits=count)
+        elif op == "s":
+            counts += EditCounts(substitutions=count)
+        elif op == "d":
+            counts += EditCounts(deletions=count)
+        else:
+            counts += EditCounts(insertions=count)
+        if op in {"e", "s", "d"}:
+            ref_used += count
+        if op in {"e", "s", "i"}:
+            hyp_used += count
+    return ref_used, hyp_used, counts
 
 
 def test_strip_markup_removes_ocular_tags_and_asides():
@@ -57,6 +78,44 @@ def test_align_handles_empty_sides():
     assert align([], ["a", "b"]) == EditCounts(insertions=2)
     assert align(["a"], []) == EditCounts(deletions=1)
     assert EditCounts().rate is None
+
+
+def test_alignment_ops_runs_are_hand_checkable():
+    # A deletion in the middle: "a lot" -> "lots" is one substitution and one dropped word.
+    assert alignment_ops("that is a lot of people".split(), "that is lots of people".split()) == [
+        ("e", 2),
+        ("s", 1),
+        ("d", 1),
+        ("e", 2),
+    ]
+    # An extra word at the end shows up as an insertion run after the matched tail.
+    assert alignment_ops("the cat sat on the mat".split(), "the cat sit on the mat today".split()) == [
+        ("e", 2),
+        ("s", 1),
+        ("e", 3),
+        ("i", 1),
+    ]
+    # Identical sequences collapse to one equal run.
+    assert alignment_ops(["a", "b", "c"], ["a", "b", "c"]) == [("e", 3)]
+
+
+def test_alignment_ops_replay_matches_align():
+    reference = "the cat sat on the mat".split()
+    hypothesis = "the cat sit on mat here".split()
+    ops = alignment_ops(reference, hypothesis)
+    ref_used, hyp_used, counts = replay_ops(ops)
+    assert ref_used == len(reference) and hyp_used == len(hypothesis)
+    expected = align(reference, hypothesis)
+    assert counts == expected
+    assert counts.errors == 3
+    # Runs are maximal: two neighbouring runs never share an op code.
+    assert all(left[0] != right[0] for left, right in zip(ops, ops[1:]))
+
+
+def test_alignment_ops_handles_empty_sides():
+    assert alignment_ops([], []) == []
+    assert alignment_ops([], ["a", "b"]) == [("i", 2)]
+    assert alignment_ops(["a", "b", "c"], []) == [("d", 3)]
 
 
 def test_edit_counts_add_and_round_trip():

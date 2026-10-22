@@ -1,4 +1,4 @@
-"""Audio inspection and upload preparation (FLAC passthrough, 16 kHz WAV, or MP3 via ffmpeg)."""
+"""Audio inspection and upload preparation (FLAC passthrough, 16 kHz WAV or FLAC, or MP3 via ffmpeg)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import soundfile as sf
 
 from ocular_evals.providers.base import ProviderError
 
-UPLOAD_FORMATS = ("flac", "wav16k", "mp3")
+UPLOAD_FORMATS = ("flac", "wav16k", "flac16k", "mp3")
 _CONTENT_TYPES = {
     ".flac": "audio/flac",
     ".wav": "audio/wav",
@@ -52,7 +52,7 @@ def _workdir(workdir: Path | None) -> Path:
     return Path(tempfile.mkdtemp(prefix="ocular-evals-"))
 
 
-def _load_mono16k(src: Path) -> np.ndarray:
+def load_mono16k(src: Path) -> np.ndarray:
     """Decode ``src`` to mono float32 samples at 16 kHz, clipped to [-1, 1]."""
     try:
         data, rate = sf.read(str(src), dtype="float32", always_2d=True)
@@ -69,7 +69,11 @@ def _load_mono16k(src: Path) -> np.ndarray:
 
 
 def _to_wav16k(src: Path, dst: Path) -> None:
-    sf.write(str(dst), _load_mono16k(src), _TARGET_RATE, subtype="PCM_16", format="WAV")
+    sf.write(str(dst), load_mono16k(src), _TARGET_RATE, subtype="PCM_16", format="WAV")
+
+
+def _to_flac16k(src: Path, dst: Path) -> None:
+    sf.write(str(dst), load_mono16k(src), _TARGET_RATE, subtype="PCM_16", format="FLAC")
 
 
 def _quietest_sample(mono: np.ndarray, target: int, *, search: int, frame: int) -> int:
@@ -103,7 +107,7 @@ def split_wav16k(
         raise ProviderError(f"audio file not found: {path}")
     if max_chunk_s <= 0:
         raise ProviderError("max_chunk_s must be positive")
-    mono = _load_mono16k(path)
+    mono = load_mono16k(path)
     target_dir = _workdir(workdir)
     total = mono.size
     max_samples = int(max_chunk_s * _TARGET_RATE)
@@ -152,8 +156,9 @@ def _to_mp3(src: Path, dst: Path) -> None:
 def prepare_upload(path: Path, *, fmt: str, workdir: Path | None = None) -> tuple[Path, str]:
     """Return ``(upload_path, content_type)`` for ``path`` encoded as ``fmt``.
 
-    ``"flac"`` returns the original file untouched. ``"wav16k"`` writes mono 16 kHz PCM16 WAV
-    and ``"mp3"`` writes mono 16 kHz 64 kbps MP3 with ffmpeg. Converted files are placed in
+    ``"flac"`` returns the original file untouched. ``"wav16k"`` writes mono 16 kHz PCM16 WAV,
+    ``"flac16k"`` the same samples losslessly compressed as FLAC, and ``"mp3"`` writes mono 16 kHz
+    64 kbps MP3 with ffmpeg. Converted files are placed in
     ``workdir`` or a fresh ``ocular-evals-*`` temporary directory.
     """
     path = Path(path)
@@ -168,6 +173,10 @@ def prepare_upload(path: Path, *, fmt: str, workdir: Path | None = None) -> tupl
         dst = target_dir / f"{path.stem}.16k.wav"
         _to_wav16k(path, dst)
         return dst, "audio/wav"
+    if fmt == "flac16k":
+        dst = target_dir / f"{path.stem}.16k.flac"
+        _to_flac16k(path, dst)
+        return dst, "audio/flac"
     dst = target_dir / f"{path.stem}.mp3"
     _to_mp3(path, dst)
     return dst, "audio/mpeg"
@@ -178,6 +187,7 @@ __all__ = [
     "audio_info",
     "content_type_for",
     "ffmpeg_available",
+    "load_mono16k",
     "prepare_upload",
     "split_wav16k",
 ]

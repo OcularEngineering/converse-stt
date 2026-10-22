@@ -19,6 +19,7 @@ runs/
 runs-extra/
 reports/*.html
 !reports/.gitkeep
+export/
 
 # Local model caches
 .cache/

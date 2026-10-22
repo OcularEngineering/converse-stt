@@ -5,7 +5,7 @@ import os
 import pytest
 
 from ocular_evals.cli import main
-from ocular_evals.config import ConfigError, all_model_names, load_model_config
+from ocular_evals.config import ConfigError, all_model_names, load_model_config, parse_model_config
 from ocular_evals.env import parse_dotenv
 from ocular_evals.registry import Registry, normalize_url, suggest_env_name, upsert_dotenv
 
@@ -65,6 +65,23 @@ def test_group_is_a_display_field_not_an_option(tmp_path):
     assert added.group == "converse-stt-1.0"
     registry.save()
     assert Registry.load(path).config("new").group == "converse-stt-1.0"
+
+
+def test_prerelease_is_a_top_level_flag_that_round_trips(tmp_path):
+    path = tmp_path / "models.toml"
+    path.write_text(
+        '[early]\nurl = "https://x.example/v1"\nkey = "X_KEY"\nmodel = "stt-2"\nprerelease = true\n\n'
+        '[stable]\nurl = "https://x.example/v1"\nkey = "X_KEY"\nmodel = "stt-2"\n',
+        encoding="utf-8",
+    )
+    registry = Registry.load(path)
+    early, stable = registry.config("early"), registry.config("stable")
+    assert early.prerelease is True and "prerelease" not in early.options
+    assert stable.prerelease is False
+    assert early.to_dict()["prerelease"] is True, "the flag reaches run.json / summary.json through to_dict"
+    assert early.digest() == stable.digest(), "a display flag does not change what is sent to the model"
+    with pytest.raises(ConfigError, match="prerelease must be true or false"):
+        parse_model_config('name = "x"\nprovider = "p"\nmodel = "m"\nprerelease = "yes"\n')
 
 
 def test_secret_in_key_field_is_rejected(tmp_path):
