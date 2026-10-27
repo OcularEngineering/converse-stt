@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The readiness check behind `models add` wants ffmpeg on PATH for mp3 uploads.
+      - run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
