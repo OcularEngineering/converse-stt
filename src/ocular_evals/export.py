@@ -14,13 +14,22 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 from datetime import UTC, datetime
 from importlib import metadata, resources
 from pathlib import Path
 from typing import Any
 
 from ocular_evals.registry import Registry
-from ocular_evals.report import DEFAULT_BOARD, LOCAL_PROVIDERS, VENDOR_LOGOS, _median, _route, run_payload
+from ocular_evals.report import (
+    DEFAULT_BOARD,
+    LOCAL_PROVIDERS,
+    VENDOR_LOGOS,
+    VENDOR_LOGOS_DARK,
+    _median,
+    _route,
+    run_payload,
+)
 from ocular_evals.runner import RUN_FILE, RunError, load_summary
 
 HARNESS_NAME = "ocular-evals"
@@ -38,6 +47,20 @@ def harness_version() -> str:
         return metadata.version(HARNESS_NAME)
     except metadata.PackageNotFoundError:  # pragma: no cover - only when run from an unpacked checkout
         return "0.1.0"
+
+
+def harness_commit() -> str | None:
+    """The git commit of the harness checkout that produced the export, so a published board names the
+    exact scoring code and not just a package version. ``None`` when not run from a git checkout."""
+    root = Path(__file__).resolve().parent
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, check=True, timeout=5
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    sha = result.stdout.strip()
+    return sha if len(sha) == 40 else None
 
 
 def default_generated() -> str:
@@ -157,6 +180,9 @@ def convert_run(
         "route": _route(model),
         "access": "open" if is_open else "proprietary",
         "streaming": name in set(board.get("streaming") or []),
+        # Scored on a pre-release deployment. Only ever true in an --include-prerelease export; the
+        # site shows a Preview chip and no model link for such a row.
+        "prerelease": is_prerelease(summary, registry),
         "notes": model.get("notes"),
         "options": payload["options"],
         "wer": _pct(summary["wer"]["rate"]),
@@ -249,15 +275,23 @@ def build_export(
     vendors = {str(run["vendor"]) for run in runs + extra}
     vendors |= {str(model.get("vendor") or "") for model in board.get("models", [])}
     vendors.discard("")
-    logos = {
-        vendor: f"{data_path}/{LOGOS_DIR}/{VENDOR_LOGOS[vendor]}"
-        for vendor in sorted(vendors)
-        if vendor in VENDOR_LOGOS and _logo_resource(VENDOR_LOGOS[vendor]).is_file()
-    }
+    logos: dict[str, Any] = {}
+    for vendor in sorted(vendors):
+        files = _logo_files(vendor)
+        if not files:
+            continue
+        light, dark = files
+        path = f"{data_path}/{LOGOS_DIR}/{light}"
+        logos[vendor] = {"light": path, "dark": f"{data_path}/{LOGOS_DIR}/{dark}"} if dark else path
     board_json = {
         "version": version,
         "generated": generated or default_generated(),
-        "harness": {"name": HARNESS_NAME, "version": harness_version(), "href": HARNESS_HREF},
+        "harness": {
+            "name": HARNESS_NAME,
+            "version": harness_version(),
+            "commit": harness_commit(),
+            "href": HARNESS_HREF,
+        },
         "dataset": {
             "repo_id": source.get("repo_id"),
             "revision": source.get("revision"),
@@ -279,6 +313,16 @@ def build_export(
 
 def _logo_resource(file_name: str):
     return resources.files("ocular_evals").joinpath("templates", LOGOS_DIR, file_name)
+
+
+def _logo_files(vendor: str) -> tuple[str, str | None] | None:
+    """``(light, dark)`` file names shipped for a vendor; ``dark`` is ``None`` when the mark reads on both
+    surfaces, the whole thing ``None`` when the package has no mark for the vendor."""
+    light = VENDOR_LOGOS.get(vendor)
+    if not light or not _logo_resource(light).is_file():
+        return None
+    dark = VENDOR_LOGOS_DARK.get(vendor)
+    return light, (dark if dark and _logo_resource(dark).is_file() else None)
 
 
 def _clear(directory: Path, suffixes: tuple[str, ...]) -> None:
@@ -304,9 +348,11 @@ def write_export(export: dict[str, Any], out: Path) -> Path:
     logos_dir = root / LOGOS_DIR
     _clear(logos_dir, (".svg", ".png"))
     for vendor in board["logos"]:
-        file_name = VENDOR_LOGOS[vendor]
-        with resources.as_file(_logo_resource(file_name)) as source:
-            shutil.copyfile(source, logos_dir / file_name)
+        light, dark = _logo_files(vendor) or (None, None)
+        for file_name in (light, dark):
+            if file_name:
+                with resources.as_file(_logo_resource(file_name)) as source:
+                    shutil.copyfile(source, logos_dir / file_name)
     return root
 
 
@@ -341,6 +387,7 @@ __all__ = [
     "convert_run",
     "default_generated",
     "format_table",
+    "harness_commit",
     "harness_version",
     "is_prerelease",
     "write_export",

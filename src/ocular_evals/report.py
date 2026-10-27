@@ -54,6 +54,13 @@ VENDOR_LOGOS = {
     "Speechmatics": "speechmatics.png",
     "xAI": "xai.png",
 }
+# White versions of marks that are near-black on transparent, for the website's dark mode. A vendor
+# listed here is exported as a ``{"light", "dark"}`` pair; everyone else as a single path.
+VENDOR_LOGOS_DARK = {
+    "ElevenLabs": "elevenlabs-dark.svg",
+    "Mistral": "mistral-dark.svg",
+    "Mistral AI": "mistral-dark.svg",
+}
 _MIME = {".svg": "image/svg+xml", ".png": "image/png"}
 
 

@@ -172,6 +172,28 @@ drops an entry (its `runs/<name>` directory is kept). Names in `models.toml` sha
    hypothesis, word alignment) and the vendor marks under `logos/`. Models marked `prerelease = true` in `models.toml`
    are left out unless you pass `--include-prerelease`; `--generated 'Oct 21, 2026'` sets the build-date label.
 
+### Publishing: two exports, two sites
+
+Ocular publishes the board twice from the same runs: the public leaderboard on useocular.com and an internal
+site that also shows models scored on pre-release deployments. The export is the only hand-off; neither site
+reads a run directory. Release status is decided here, once, and never on a site:
+
+```sh
+uv run ocular-evals export --out export/public                          # what the public site gets
+uv run ocular-evals export --out export/internal --include-prerelease   # the internal site: every run
+```
+
+- A model that must not be named in this repository yet goes in `models.local.toml` (git-ignored, merged over
+  `models.toml`) with `prerelease = true`. Its run is dropped from the public export together with its
+  transcript file, and `prerelease: true` is written on its row in the internal export so that site can mark it
+  "Preview". When the model ships, move the table into `models.toml`, drop the flag, re-export, re-sync.
+- `board.json` records `harness.version` and `harness.commit` (the git SHA of this checkout), so every published
+  board names the exact scoring code. A change to the scorer, normalizer or dataset makes a new board **version**
+  under the version policy, never an update to a published one; the site syncs refuse to overwrite a version whose
+  harness version differs unless told it is a new version.
+- `scripts/publish.sh` runs both exports, syncs each into its site checkout and opens the two review PRs; see
+  the script header for the checkout paths it expects.
+
 ## Model configs
 
 `models.toml` is the short form described above. Under the hood every entry becomes a full model config;
@@ -188,6 +210,7 @@ env = ["OPENAI_API_KEY"]
 href = "https://platform.openai.com/docs/guides/speech-to-text"
 # group = "converse-stt-1.0"    # optional: put the run on the leaderboard's "Version 1 models" tab instead of the 2.0 board
 # prerelease = true             # optional: a pre-release deployment; `export` skips the run unless --include-prerelease
+#                               # (put such a table in the git-ignored models.local.toml if the model cannot be named here yet)
 
 [options]
 response_format = "json"
@@ -213,6 +236,8 @@ The `xai`, `meta` and `reson8` adapters need only `provider`, `key` and `model` 
 
 ```
 models.toml       the models this harness runs (url + key per model)
+models.local.toml private overlay: pre-release or private models, merged over models.toml (gitignored)
+scripts/publish.sh  export both profiles, sync both site checkouts, open the review PRs
 src/ocular_evals/
   dataset.py      Hugging Face / local AudioFolder -> manifest.json
   text.py         normalization profiles

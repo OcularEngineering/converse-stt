@@ -84,6 +84,38 @@ def test_prerelease_is_a_top_level_flag_that_round_trips(tmp_path):
         parse_model_config('name = "x"\nprovider = "p"\nmodel = "m"\nprerelease = "yes"\n')
 
 
+def test_local_overlay_merges_over_the_public_file_and_is_never_written(tmp_path):
+    path = tmp_path / "models.toml"
+    path.write_text(MINIMAL, encoding="utf-8")
+    overlay = tmp_path / "models.local.toml"
+    overlay.write_text(
+        '[secret-stt]\nurl = "https://private.example/v1"\nkey = "SECRET_KEY"\nprerelease = true\n\n'
+        '[acme-stt]\nurl = "https://api.acme.ai/v1"\nkey = "ACME_API_KEY"\nnotes = "overridden"\n',
+        encoding="utf-8",
+    )
+    registry = Registry.load(path)
+    assert registry.names() == ["acme-stt-1", "acme-stt", "secret-stt"], "public order first, overlay additions after"
+    assert registry.local == {"secret-stt", "acme-stt"}
+    assert registry.config("secret-stt").prerelease is True
+    assert registry.config("acme-stt").notes == "overridden", "an overlay table replaces the public one"
+    assert registry.config("secret-stt").source.startswith(str(overlay))
+    assert registry.entries["secret-stt"].get("prerelease") is True, "export's is_prerelease reads entries"
+
+    with pytest.raises(ConfigError, match="models.local.toml"):
+        registry.remove("secret-stt")
+    with pytest.raises(ConfigError, match="models.local.toml"):
+        registry.add("secret-stt", url="https://x.example/v1", key_env="X_KEY", replace=True)
+
+    registry.add("new-one", url="https://api.new.example/v1", key_env="NEW_API_KEY")
+    registry.remove("acme-stt-1")
+    registry.save()
+    public = path.read_text(encoding="utf-8")
+    assert "secret-stt" not in public and "private.example" not in public, "overlay entries never reach models.toml"
+    assert "[new-one]" in public and "[acme-stt-1]" not in public
+    assert overlay.read_text(encoding="utf-8").count("[") == 2, "the overlay is left alone"
+    assert Registry.load(path).names() == ["acme-stt", "new-one", "secret-stt"]
+
+
 def test_secret_in_key_field_is_rejected(tmp_path):
     path = tmp_path / "models.toml"
     path.write_text('[leaky]\nurl = "https://x.ai/v1"\nkey = "sk-live-abcdef"\n', encoding="utf-8")

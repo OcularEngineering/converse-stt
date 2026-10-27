@@ -10,7 +10,7 @@ import soundfile as sf
 from ocular_evals import __version__
 from ocular_evals.config import parse_model_config
 from ocular_evals.dataset import build_dataset, load_dataset, read_jsonl
-from ocular_evals.export import build_export, harness_version, write_export
+from ocular_evals.export import build_export, harness_commit, harness_version, write_export
 from ocular_evals.providers.base import Hypothesis, Provider, ProviderError
 from ocular_evals.registry import Registry
 from ocular_evals.report import build_payload, load_board, render_html, write_report
@@ -446,8 +446,11 @@ def test_export_writes_board_transcripts_and_logos(dataset, tmp_path):
         _scored_run(dataset, tmp_path / "runs" / "fake-model"),
         _scored_run(dataset, tmp_path / "runs" / "nv", nvidia),
     ]
+    # An operating point from a vendor whose mark needs a dark-mode version.
+    eleven_text = CONFIG_TEXT.replace("fake-model", "fake-eleven").replace('vendor = "Tests"', 'vendor = "ElevenLabs"')
+    extra = [_scored_run(dataset, tmp_path / "runs-extra" / "fake-eleven-fast", parse_model_config(eleven_text))]
 
-    export = _export(tmp_path, runs)
+    export = _export(tmp_path, runs, extra)
     board = export["board"]
     assert export["slug"] == "converse-stt" and export["version"] == "2", "slug and version come from the board file"
     assert list(board) == [
@@ -466,8 +469,10 @@ def test_export_writes_board_transcripts_and_logos(dataset, tmp_path):
     assert board["harness"] == {
         "name": "ocular-evals",
         "version": harness_version(),
+        "commit": harness_commit(),
         "href": "https://github.com/OcularEngineering/converse-stt",
     }
+    assert board["harness"]["commit"] is None or len(board["harness"]["commit"]) == 40, "full git SHA when available"
     assert board["dataset"] == {
         "repo_id": None,
         "revision": None,
@@ -478,11 +483,16 @@ def test_export_writes_board_transcripts_and_logos(dataset, tmp_path):
         "reference_characters": board["runs"][0]["counts"]["cer"]["reference_length"],
     }
     assert board["profile"] == "whisper" and board["transcriptsPath"] == "/data/converse-stt/v2"
-    assert board["operatingPoints"] == []
+    assert [point["id"] for point in board["operatingPoints"]] == ["fake-eleven-fast"]
     # Marks for the harness runs' vendors plus the published Version 1 vendors the site still shows;
     # "Tests" has no mark and is left out.
     assert board["logos"]["NVIDIA"] == "/data/converse-stt/v2/logos/nvidia.svg"
     assert "Tests" not in board["logos"]
+    # Near-black marks come as a light/dark pair so the site can swap them in dark mode.
+    assert board["logos"]["ElevenLabs"] == {
+        "light": "/data/converse-stt/v2/logos/elevenlabs.svg",
+        "dark": "/data/converse-stt/v2/logos/elevenlabs-dark.svg",
+    }
     published_vendors = {model["vendor"] for model in load_board("converse-stt")["models"]}
     assert published_vendors & {"Cartesia", "Reson8"} <= set(board["logos"]), "Version 1 vendors get marks too"
 
@@ -504,6 +514,7 @@ def test_export_writes_board_transcripts_and_logos(dataset, tmp_path):
         "route",
         "access",
         "streaming",
+        "prerelease",
         "notes",
         "options",
         "wer",
@@ -521,6 +532,7 @@ def test_export_writes_board_transcripts_and_logos(dataset, tmp_path):
     }
     assert run["displayName"] == "Fake Model" and run["wer"] == pytest.approx(round(2 / 26 * 100, 2))
     assert run["route"] == "direct" and run["access"] == "proprietary" and run["streaming"] is False
+    assert run["prerelease"] is False
     assert run["counts"]["wer"]["errors"] == 2 and run["counts"]["wer"]["rate"] == run["wer"]
     assert run["medianLatencyS"] < 0.1, "the fake provider answers instantly; the recorded latency is kept, not dropped"
     assert run["complete"] is True and run["tracksScored"] == 4
@@ -536,6 +548,8 @@ def test_export_writes_board_transcripts_and_logos(dataset, tmp_path):
     assert written == board
     assert sorted(path.name for path in (root / "transcripts").iterdir()) == ["fake-model.json", "fake-nvidia.json"]
     assert (root / "logos" / "nvidia.svg").read_bytes().startswith(b"<")
+    assert (root / "logos" / "elevenlabs-dark.svg").is_file(), "both halves of a light/dark pair are written"
+    assert b'fill="#ffffff"' in (root / "logos" / "elevenlabs-dark.svg").read_bytes()
     transcript = json.loads((root / "transcripts" / "fake-model.json").read_text(encoding="utf-8"))
     assert list(transcript) == ["run", "model", "profile", "conversations"]
     assert transcript["run"] == "fake-model" and transcript["model"] == "Fake Model"
@@ -566,6 +580,8 @@ def test_export_excludes_prerelease_models_unless_asked(dataset, tmp_path):
     export = _export(tmp_path, [stable, flagged], include_prerelease=True)
     assert sorted(run["id"] for run in export["board"]["runs"]) == ["fake-early", "fake-model"]
     assert export["excluded"] == []
+    flags = {run["id"]: run["prerelease"] for run in export["board"]["runs"]}
+    assert flags == {"fake-early": True, "fake-model": False}, "the internal export says which rows are pre-release"
 
     # Runs recorded before the flag existed are still excluded when the current models.toml marks the model.
     other = _scored_run(
@@ -575,6 +591,12 @@ def test_export_excludes_prerelease_models_unless_asked(dataset, tmp_path):
     export = _export(tmp_path, [stable, flagged, other], models_toml=marked)
     assert [run["id"] for run in export["board"]["runs"]] == ["fake-other"]
     assert export["excluded"] == ["fake-model", "fake-early"]
+
+    # ...or when the git-ignored models.local.toml overlay marks it, so the public models.toml never names it.
+    (tmp_path / "models.local.toml").write_text(marked, encoding="utf-8")
+    export = _export(tmp_path, [stable, other], models_toml="")
+    assert [run["id"] for run in export["board"]["runs"]] == ["fake-other"] and export["excluded"] == ["fake-model"]
+    (tmp_path / "models.local.toml").unlink()
 
     with pytest.raises(RunError, match=r"no runs to export \(1 pre-release run\(s\) excluded\)"):
         _export(tmp_path, [flagged])
