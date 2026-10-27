@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# Private model registry overlay (pre-release deployments, private endpoints); merged over models.toml
+models.local.toml
+
 # Python
 __pycache__/
 *.py[cod]
@@ -19,6 +22,7 @@ runs/
 runs-extra/
 reports/*.html
 !reports/.gitkeep
+export/
 
 # Local model caches
 .cache/

@@ -1,0 +1,11 @@
+# Changes to what a score *is* need an Ocular maintainer's review: these files decide every number
+# on the published boards, and a change to them is a new board version (see tests/test_pinned_scores.py).
+/src/ocular_evals/metrics.py        @MichaelMoyoMushabati
+/src/ocular_evals/text.py           @MichaelMoyoMushabati
+/src/ocular_evals/runner.py         @MichaelMoyoMushabati
+/src/ocular_evals/export.py         @MichaelMoyoMushabati
+/src/ocular_evals/boards/           @MichaelMoyoMushabati
+/tests/test_pinned_scores.py        @MichaelMoyoMushabati
+/pyproject.toml                     @MichaelMoyoMushabati
+/models.toml                        @MichaelMoyoMushabati
+/scripts/publish.sh                 @MichaelMoyoMushabati

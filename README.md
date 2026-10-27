@@ -55,7 +55,7 @@ package, one manifest format, one command. Results and methodology are written u
 git clone https://github.com/OcularEngineering/converse-stt && cd converse-stt
 uv sync --group dev              # hosted providers only
 uv sync --group dev --extra local  # also installs faster-whisper for local Whisper runs
-uv sync --group dev --extra nemotron  # torch + transformers for NVIDIA's Nemotron streaming ASR models (local)
+uv sync --group dev --extra nemotron  # torch + transformers for the local Transformers models (NVIDIA Nemotron, Cohere Transcribe)
 cp .env.example .env             # add OPENROUTER_API_KEY and any direct vendor keys you use (HF_TOKEN is optional)
 
 uv run ocular-evals dataset pull                 # Ocular AI English sample from Hugging Face -> data/converse-en-sample
@@ -64,6 +64,7 @@ uv run ocular-evals check                        # credentials + dependencies fo
 uv run ocular-evals run --model gpt-4o-mini-transcribe   # transcribe + score -> runs/gpt-4o-mini-transcribe
 uv run ocular-evals report                       # every scored run in runs/ -> reports/converse-stt.html
 open reports/converse-stt.html
+uv run ocular-evals export                       # board + transcripts as JSON for the website -> export/converse-stt/v2/
 ```
 
 `.env` is loaded automatically from the working directory and never committed.
@@ -115,7 +116,7 @@ that already holds it (`--key OPENAI_API_KEY`). Use `--key -` to paste the secre
 shell history. Useful extras: `--model <api-model-id>` when the id the API expects differs from the name,
 `--vendor` and `--display-name` for the leaderboard, `--upload mp3` when the API caps uploads (the 25 MB
 limits of OpenAI and OpenRouter are handled automatically), `--provider faster-whisper` for local Whisper, `--provider nemotron-asr` for NVIDIA's Nemotron
-streaming models, or another built-in provider id for job-style APIs, `--option key=value` for anything else. To run the same model
+streaming models, `--provider cohere-transcribe` for Cohere Transcribe, or another built-in provider id for job-style APIs, `--option key=value` for anything else. To run the same model
 both ways, give the direct entry its own name (or use `--replace` to switch an existing one).
 
 Editing the file by hand is equally fine:
@@ -165,6 +166,33 @@ drops an entry (its `runs/<name>` directory is kept). Names in `models.toml` sha
    (or the `--run` directories you name), toggles between WER and CER, and shows reference and hypothesis
    side by side for every track. A repeated short segment is flagged because it usually means the decoder
    looped. Pass `--board converse-stt` to also show the Converse-STT 1.0 figures next to the 2.0 runs.
+6. **Export.** `export` writes the same runs as the JSON the [leaderboard website](https://www.useocular.com/converse/stt)
+   consumes: `export/converse-stt/v2/board.json` (every run with pooled counts per conversation and track, plus the
+   operating points in `runs-extra/`), one `transcripts/<run>.json` per board run (reference, normalized and raw
+   hypothesis, word alignment) and the vendor marks under `logos/`. Models marked `prerelease = true` in `models.toml`
+   are left out unless you pass `--include-prerelease`; `--generated 'Oct 21, 2026'` sets the build-date label.
+
+### Publishing: two exports, two sites
+
+Ocular publishes the board twice from the same runs: the public leaderboard on useocular.com and an internal
+site that also shows models scored on pre-release deployments. The export is the only hand-off; neither site
+reads a run directory. Release status is decided here, once, and never on a site:
+
+```sh
+uv run ocular-evals export --out export/public                          # what the public site gets
+uv run ocular-evals export --out export/internal --include-prerelease   # the internal site: every run
+```
+
+- A model that must not be named in this repository yet goes in `models.local.toml` (git-ignored, merged over
+  `models.toml`) with `prerelease = true`. Its run is dropped from the public export together with its
+  transcript file, and `prerelease: true` is written on its row in the internal export so that site can mark it
+  "Preview". When the model ships, move the table into `models.toml`, drop the flag, re-export, re-sync.
+- `board.json` records `harness.version` and `harness.commit` (the git SHA of this checkout), so every published
+  board names the exact scoring code. A change to the scorer, normalizer or dataset makes a new board **version**
+  under the version policy, never an update to a published one; the site syncs refuse to overwrite a version whose
+  harness version differs unless told it is a new version.
+- `scripts/publish.sh` runs both exports, syncs each into its site checkout and opens the two review PRs; see
+  the script header for the checkout paths it expects.
 
 ## Model configs
 
@@ -176,11 +204,13 @@ built-in examples live in `src/ocular_evals/models/*.toml`, and any TOML file wi
 name = "gpt-4o-mini-transcribe"
 display_name = "GPT-4o mini Transcribe"
 vendor = "OpenAI"
-provider = "openai-compatible"   # openai-compatible | openai-realtime | xai | meta | reson8 | omi | faster-whisper | nemotron-asr
+provider = "openai-compatible"   # openai-compatible | openai-realtime | xai | meta | reson8 | omi | faster-whisper | nemotron-asr | cohere-transcribe
 model = "gpt-4o-mini-transcribe"
 env = ["OPENAI_API_KEY"]
 href = "https://platform.openai.com/docs/guides/speech-to-text"
 # group = "converse-stt-1.0"    # optional: put the run on the leaderboard's "Version 1 models" tab instead of the 2.0 board
+# prerelease = true             # optional: a pre-release deployment; `export` skips the run unless --include-prerelease
+#                               # (put such a table in the git-ignored models.local.toml if the model cannot be named here yet)
 
 [options]
 response_format = "json"
@@ -197,6 +227,7 @@ upload = "mp3"                   # OpenAI caps uploads at 25 MB
 | `omi`               | asynchronous job API for long audio: create job, upload, poll for result | `base_url`, `api_key_env`, `response_format`, `poll_wait_s`, `deadline_s`   |
 | `faster-whisper`    | local CTranslate2 Whisper                                                 | `device`, `compute_type`, `beam_size`, `vad_filter`, `condition_on_previous_text` |
 | `nemotron-asr`      | local Transformers inference for NVIDIA's cache-aware streaming models (`nvidia/nemotron-speech-streaming-en-0.6b`, `nvidia/nemotron-3.5-asr-streaming-0.6b`); tracks are cut at pauses into ≤ 400 s pieces (the model's positional limit) | `lookahead_frames` (right context in 80 ms frames: 0 = 80 ms latency … 13 = 1.12 s, the most accurate; offline output at a lookahead equals streaming at that chunk size), `language` (locale prompt for the multilingual 3.5 model), `device` (`auto`/`cpu`/`mps`/`cuda`), `max_chunk_s`, `search_s` |
+| `cohere-transcribe` | local Transformers inference for Cohere's open-weight `CohereLabs/cohere-transcribe-03-2026` (gated: accept the licence on Hugging Face and log in once); tracks are cut with the model's own energy-based splitter into ≤ 35 s pieces, transcribed in batches and joined | `device` (`auto`/`cpu`/`mps`/`cuda`), `dtype` (`auto` = bfloat16 on GPU, float32 on CPU), `batch_size`, `max_new_tokens`, `punctuation`, `language`, `skip_silence_dbfs` (optional peak-level gate that skips near-silent pieces instead of sending them to the decoder; off by default) |
 
 Options never contain credentials; keys are read from the environment variables listed in `env`.
 The `xai`, `meta` and `reson8` adapters need only `provider`, `key` and `model` in `models.toml`; their base URLs are built in.
@@ -205,23 +236,28 @@ The `xai`, `meta` and `reson8` adapters need only `provider`, `key` and `model` 
 
 ```
 models.toml       the models this harness runs (url + key per model)
+models.local.toml private overlay: pre-release or private models, merged over models.toml (gitignored)
+scripts/publish.sh  export both profiles, sync both site checkouts, open the review PRs
 src/ocular_evals/
   dataset.py      Hugging Face / local AudioFolder -> manifest.json
   text.py         normalization profiles
   metrics.py      EditCounts, WER / CER alignment
   config.py       model TOML loading
   registry.py     models.toml parsing / `models add`
-  providers/      openai_compatible, openai_realtime, xai, meta, reson8, omi, faster_whisper, nemotron_asr (+ retrying HTTP, audio prep / chunking)
+  providers/      openai_compatible, openai_realtime, xai, meta, reson8, omi, faster_whisper, nemotron_asr, cohere_transcribe (+ retrying HTTP, audio prep / chunking)
   runner.py       resumable transcription + scoring of a run directory
   report.py       leaderboard HTML
+  export.py       board + transcripts JSON for the website (`export`)
   models/         built-in model configs
-  boards/         Converse-STT 1.0 figures, shown by the report on request (--board)
-  templates/      leaderboard.html
+  boards/         benchmark slug / version, conversation topics, open-weight and streaming lists, Converse-STT 1.0 figures
+  templates/      leaderboard.html, vendor logos
 docs/             technical report (Markdown + generated HTML) and its build script
 tests/            pytest, no network
 data/             datasets (gitignored)
 runs/             run directories (gitignored)
+runs-extra/       operating points: the same models at other settings, exported but not ranked (gitignored)
 reports/          generated HTML (gitignored)
+export/           website JSON (gitignored)
 ```
 
 ## Development
@@ -239,7 +275,7 @@ uv run ruff check . && uv run ruff format --check .
   every provider we are asked about; contributions of new entries are welcome.
 - **More providers.** Native adapters for APIs that do not speak the OpenAI transcription protocol
   (streaming / WebSocket vendors, batch job APIs) beyond the current `openai-compatible`, `openai-realtime`,
-  `xai`, `meta`, `reson8`, `omi`, `faster-whisper` and `nemotron-asr` backends.
+  `xai`, `meta`, `reson8`, `omi`, `faster-whisper`, `nemotron-asr` and `cohere-transcribe` backends.
 - **More datasets and languages.** Run the same harness over additional Ocular AI conversation sets as they
   are published, including non-English ones.
 - **Latency and cost.** Record time-to-transcript and per-minute pricing next to accuracy so the board can

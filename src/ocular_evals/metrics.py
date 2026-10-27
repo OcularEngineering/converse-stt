@@ -127,6 +127,39 @@ def align(reference: list[str], hypothesis: list[str]) -> EditCounts:
     )
 
 
+_OP_CODES = {"equal": "e", "substitute": "s", "delete": "d", "insert": "i"}
+
+
+def alignment_ops(reference: list[str], hypothesis: list[str]) -> list[tuple[str, int]]:
+    """The word alignment behind :func:`align` as runs of ``(op, count)``.
+
+    ``e`` (equal) and ``s`` (substitute) advance both sequences, ``d`` (delete) advances the
+    reference only and ``i`` (insert) the hypothesis only. Replaying the runs over the two token
+    lists reproduces every edit the score was computed from.
+    """
+    if not reference and not hypothesis:
+        return []
+    if not reference:
+        return [("i", len(hypothesis))]
+    if not hypothesis:
+        return [("d", len(reference))]
+    out = jiwer.process_words(
+        list(reference),
+        list(hypothesis),
+        reference_transform=_IDENTITY,
+        hypothesis_transform=_IDENTITY,
+    )
+    ops: list[tuple[str, int]] = []
+    for chunk in out.alignments[0]:
+        if chunk.type == "insert":
+            count = chunk.hyp_end_idx - chunk.hyp_start_idx
+        else:
+            count = chunk.ref_end_idx - chunk.ref_start_idx
+        if count:
+            ops.append((_OP_CODES[chunk.type], count))
+    return ops
+
+
 def primary_metric(language: str | None) -> Metric:
     return "cer" if language_code(language) in CER_LANGUAGES else "wer"
 

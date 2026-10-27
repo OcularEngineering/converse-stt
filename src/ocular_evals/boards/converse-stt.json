@@ -1,9 +1,54 @@
 {
+  "slug": "converse-stt",
+  "version": "2",
   "name": "Converse-STT 1.0",
   "label": "Converse-STT 1.0 (with Cekura)",
   "updated": "September 2026",
   "source": "https://www.useocular.com/converse/stt",
   "metric": "wer",
+  "group": "converse-stt-1.0",
+  "conversations": {
+    "0fcd38f2": {
+      "topic": "Drones, privacy",
+      "speakers": {
+        "ch1": "Male speaker",
+        "ch2": "Female speaker"
+      }
+    },
+    "2bb0cfe2": {
+      "topic": "News sources",
+      "speakers": {
+        "ch1": "Female speaker, 45–55",
+        "ch2": "Male speaker"
+      }
+    },
+    "86c27418": {
+      "topic": "Fitness plans",
+      "speakers": {
+        "ch1": "Female speaker, 45–55",
+        "ch2": "Female speaker"
+      }
+    },
+    "ea217639": {
+      "topic": "Brand loyalty",
+      "speakers": {
+        "ch1": "Female speaker, 35–45",
+        "ch2": "Male speaker, 45–55"
+      }
+    }
+  },
+  "openWeights": [
+    "parakeet-tdt-0-6b-v3",
+    "qwen3-asr-1-7b",
+    "nemotron-3-asr-streaming-en-0-6b",
+    "nemotron-3-5-asr-streaming-0-6b",
+    "cohere-transcribe"
+  ],
+  "streaming": [
+    "nemotron-3-asr-streaming-en-0-6b",
+    "nemotron-3-5-asr-streaming-0-6b",
+    "gpt-realtime-whisper"
+  ],
   "models": [
     {
       "name": "Reson8",
@@ -140,6 +185,5 @@
       "href": "https://openai.com/",
       "run": "gpt-4o-transcribe"
     }
-  ],
-  "group": "converse-stt-1.0"
+  ]
 }

@@ -28,7 +28,7 @@ DEFAULT_REPORT = Path("reports/converse-stt.html")
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
 OPENROUTER_KEY_ENV = "OPENROUTER_API_KEY"
 MP3_UPLOAD_HOSTS = ("api.openai.com", "openrouter.ai")
-LOCAL_PROVIDERS = frozenset({"faster-whisper", "nemotron-asr"})  # run on this machine; no API key
+LOCAL_PROVIDERS = frozenset({"faster-whisper", "nemotron-asr", "cohere-transcribe"})  # run on this machine; no API key
 
 
 def _fail(message: str) -> int:
@@ -366,6 +366,35 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export(args: argparse.Namespace) -> int:
+    from ocular_evals.export import BOARD_FILE, TRANSCRIPTS_DIR, build_export, format_table, write_export
+    from ocular_evals.report import discover_runs, load_board
+    from ocular_evals.runner import RunError
+
+    runs_dir = args.runs if args.runs is not None else args.runs_dir
+    run_dirs = discover_runs(runs_dir)
+    if not run_dirs:
+        return _fail(f"no scored runs under {runs_dir}; run a model first")
+    try:
+        registry = Registry.load(args.models_file)
+        export = build_export(
+            run_dirs,
+            discover_runs(args.extra),
+            board=load_board(args.board),
+            registry=registry,
+            generated=args.generated,
+            include_prerelease=args.include_prerelease,
+        )
+        root = write_export(export, args.out)
+    except (ConfigError, RunError) as exc:
+        return _fail(str(exc))
+    for name in export["excluded"]:
+        print(f"excluded pre-release run {name} (pass --include-prerelease to keep it)", file=sys.stderr)
+    print(f"{root / BOARD_FILE}; transcripts -> {root / TRANSCRIPTS_DIR}/")
+    print(format_table(export))
+    return 0
+
+
 # --- text ----------------------------------------------------------------------
 
 
@@ -466,6 +495,7 @@ def build_parser() -> argparse.ArgumentParser:
             "omi",
             "faster-whisper",
             "nemotron-asr",
+            "cohere-transcribe",
         ),
         default=None,
     )
@@ -526,6 +556,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     report.add_argument("--label", default="This sample", help="label for harness rows")
     report.set_defaults(func=cmd_report)
+
+    from ocular_evals.export import DEFAULT_EXPORT, DEFAULT_EXTRA
+    from ocular_evals.report import DEFAULT_BOARD
+
+    export = sub.add_parser(
+        "export",
+        help="write the board and per-run transcripts as JSON for the website (default: runs/ and runs-extra/)",
+    )
+    export.add_argument("--runs", type=Path, default=None, help="board run directories (default: --runs-dir)")
+    export.add_argument(
+        "--extra", type=Path, default=DEFAULT_EXTRA, help="operating-point run directories (default: runs-extra/)"
+    )
+    export.add_argument(
+        "--board",
+        default=DEFAULT_BOARD,
+        help="board file naming the benchmark slug, version, conversations and open-weight / streaming models "
+        "(built-in name or JSON path; default: converse-stt)",
+    )
+    export.add_argument("--out", type=Path, default=DEFAULT_EXPORT, help="output root (default: export/)")
+    export.add_argument(
+        "--include-prerelease", action="store_true", help="keep runs of models marked prerelease = true"
+    )
+    export.add_argument(
+        "--generated", default=None, help="label for the build date (default: today, e.g. 'Oct 21, 2026')"
+    )
+    export.set_defaults(func=cmd_export)
 
     norm = sub.add_parser("normalize", help="show how text is normalized before scoring")
     norm.add_argument("text", nargs="*")
