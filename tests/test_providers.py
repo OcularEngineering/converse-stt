@@ -18,6 +18,11 @@ from ocular_evals.providers.faster_whisper import FasterWhisperProvider
 from ocular_evals.providers.http import error_from_response, send_with_retry
 from ocular_evals.providers.meta import MetaProvider
 from ocular_evals.providers.nemotron_asr import NemotronAsrProvider
+from ocular_evals.providers.nemotron_transcribe import (
+    SINGLE_SPEAKER_PROMPT,
+    NemotronTranscribeProvider,
+    cleanup_generation_loops,
+)
 from ocular_evals.providers.omi import OmiProvider
 from ocular_evals.providers.openai_compatible import OpenAICompatibleProvider
 from ocular_evals.providers.openai_realtime import OpenAIRealtimeProvider, _load_pcm24k
@@ -70,6 +75,7 @@ def _config(provider: str, model: str, **options: Any) -> ModelConfig:
         "openai-realtime": ("OPENAI_API_KEY",),
         "xai": ("XAI_API_KEY",),
         "reson8": ("RESON8_API_KEY",),
+        "nemotron-transcribe": ("NEMOTRON_TRANSCRIBE_ENDPOINT",),
         "meta": ("META_API_KEY",),
     }.get(provider, ())
     return ModelConfig(
@@ -98,6 +104,7 @@ def test_registry_exposes_every_provider():
         "faster-whisper",
         "nemotron-asr",
         "cohere-transcribe",
+        "nemotron-transcribe",
     }
     assert isinstance(create_provider(_config("omi", "omi-general-1")), OmiProvider)
     assert isinstance(create_provider(_config("xai", "grok-voice-transcribe-2.0")), XaiProvider)
@@ -1360,3 +1367,128 @@ def test_cohere_transcribe_with_fake_model(monkeypatch: pytest.MonkeyPatch, tmp_
     captured["batches"].clear()
     assert everything.transcribe(path, language="en").raw["pieces_skipped_as_silence"] == 0
     assert captured["batches"] == [5], "without a silence gate every piece is transcribed"
+
+
+# --- nemotron-transcribe --------------------------------------------------------
+
+
+def test_cleanup_generation_loops_matches_the_guide():
+    assert cleanup_generation_loops("a" * 30 + " ok") == "a ok"
+    assert cleanup_generation_loops("a" * 19) == "a" * 19  # below both thresholds
+    block = "and the other side of the road "
+    assert cleanup_generation_loops("so " + block * 25 + "yes") == "so " + block + "yes"
+    assert cleanup_generation_loops("so " + block * 19 + "yes") == "so " + block * 19 + "yes"
+
+
+def test_nemotron_transcribe_sends_chat_completion_with_data_url(monkeypatch: pytest.MonkeyPatch, flac: Path):
+    monkeypatch.setenv("NEMOTRON_TRANSCRIBE_ENDPOINT", "https://nemotron.example.test/")
+    loop = "the world is a world of peace. " * 40
+
+    def route(method: str, url: str, kwargs: dict[str, Any]) -> httpx.Response:
+        assert method == "POST"
+        return _response(
+            200,
+            url,
+            json={
+                "id": "chatcmpl-1",
+                "model": "nvidia/Nemotron-3.5-Transcribe-30B-A4B",
+                "choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": f" Hello. {loop}"}}],
+                "usage": {"prompt_tokens": 1200, "completion_tokens": 300},
+            },
+        )
+
+    client = FakeClient(route)
+    provider = NemotronTranscribeProvider(
+        _config("nemotron-transcribe", "nvidia/Nemotron-3.5-Transcribe-30B-A4B", user_agent="eval-client/1.0"),
+        client=client,
+    )
+    assert provider.check() == []
+
+    hypothesis = provider.transcribe(flac, language="en-US")
+
+    assert hypothesis.text == "Hello. the world is a world of peace."
+    assert hypothesis.language == "en" and hypothesis.duration_s == pytest.approx(0.1, abs=0.01)
+    _, url, kwargs = client.calls[0]
+    assert url == "https://nemotron.example.test/v1/chat/completions"
+    assert kwargs["headers"]["User-Agent"] == "eval-client/1.0" and "Authorization" not in kwargs["headers"]
+    payload = kwargs["json"]
+    assert payload["model"] == "nvidia/Nemotron-3.5-Transcribe-30B-A4B"
+    assert payload["temperature"] == 0 and payload["top_p"] == 1.0 and payload["seed"] == 0
+    assert payload["max_tokens"] == 16384 and payload["stream"] is False
+    assert payload["chat_template_kwargs"] == {"enable_thinking": False}
+    assert [m["role"] for m in payload["messages"]] == ["user"], "no system prompt"
+    text_part, audio_part = payload["messages"][0]["content"]
+    assert text_part == {"type": "text", "text": SINGLE_SPEAKER_PROMPT}
+    assert audio_part["audio_url"]["url"].startswith("data:audio/flac;base64,")
+    assert hypothesis.raw["loop_cleanup"] == {
+        "applied": True,
+        "changed": True,
+        "chars_before": len(f"Hello. {loop}".strip()),
+        "chars_after": len(hypothesis.text),
+    }
+    assert hypothesis.raw["usage"]["completion_tokens"] == 300 and hypothesis.raw["request_id"] == "chatcmpl-1"
+    assert hypothesis.raw["upload"]["format"] == "flac16k"
+
+
+def test_nemotron_transcribe_rejects_incomplete_and_validates(monkeypatch: pytest.MonkeyPatch, flac: Path):
+    monkeypatch.setenv("NEMOTRON_TRANSCRIBE_ENDPOINT", "https://nemotron.example.test")
+    monkeypatch.setenv("NEMOTRON_TRANSCRIBE_TOKEN", "tok-123")
+
+    def route(method: str, url: str, kwargs: dict[str, Any]) -> httpx.Response:
+        assert kwargs["headers"]["Authorization"] == "Bearer tok-123"
+        return _response(200, url, json={"choices": [{"finish_reason": "length", "message": {"content": "partial"}}]})
+
+    provider = NemotronTranscribeProvider(
+        _config(
+            "nemotron-transcribe", "nvidia/Nemotron-3.5-Transcribe-30B-A4B", api_key_env="NEMOTRON_TRANSCRIBE_TOKEN"
+        ),
+        client=FakeClient(route),
+    )
+    with pytest.raises(ProviderError, match="finish_reason='length'"):
+        provider.transcribe(flac, language="en")
+
+    bad = NemotronTranscribeProvider(
+        _config(
+            "nemotron-transcribe",
+            "x",
+            upload="mp3",
+            max_tokens=0,
+            temperature=-1,
+            top_p=2,
+            seed="zero",
+            loop_cleanup="yes",
+            prompt=" ",
+            chunk_s=0,
+            extra=1,
+        )
+    )
+    problems = bad.check()
+    for key in ("upload", "max_tokens", "temperature", "top_p", "seed", "loop_cleanup", "prompt", "chunk_s", "extra"):
+        assert any(key in item for item in problems), key
+
+    monkeypatch.delenv("NEMOTRON_TRANSCRIBE_ENDPOINT")
+    missing = NemotronTranscribeProvider(_config("nemotron-transcribe", "x"))
+    assert missing.check() == ["environment variable NEMOTRON_TRANSCRIBE_ENDPOINT is not set"]
+
+
+def test_nemotron_transcribe_chunks_long_audio(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    monkeypatch.setenv("NEMOTRON_TRANSCRIBE_ENDPOINT", "https://nemotron.example.test")
+    path = tmp_path / "long.flac"
+    sf.write(str(path), np.zeros((25 * 16000, 1), dtype=np.float32), 16000, format="FLAC")
+    calls = {"n": 0}
+
+    def route(method: str, url: str, kwargs: dict[str, Any]) -> httpx.Response:
+        calls["n"] += 1
+        assert kwargs["json"]["messages"][0]["content"][1]["audio_url"]["url"].startswith("data:audio/wav;base64,")
+        return _response(
+            200, url, json={"choices": [{"finish_reason": "stop", "message": {"content": f"part {calls['n']}"}}]}
+        )
+
+    provider = NemotronTranscribeProvider(
+        _config("nemotron-transcribe", "x", upload="wav16k", chunk_s=10, search_s=1), client=FakeClient(route)
+    )
+    hypothesis = provider.transcribe(path, language="en")
+
+    assert hypothesis.text == "part 1 part 2 part 3"
+    assert [c["start_s"] for c in hypothesis.raw["upload"]["chunks"]][0] == 0.0
+    assert len(hypothesis.raw["upload"]["chunks"]) == 3 and hypothesis.duration_s == pytest.approx(25.0)

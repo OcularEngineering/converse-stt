@@ -116,7 +116,7 @@ that already holds it (`--key OPENAI_API_KEY`). Use `--key -` to paste the secre
 shell history. Useful extras: `--model <api-model-id>` when the id the API expects differs from the name,
 `--vendor` and `--display-name` for the leaderboard, `--upload mp3` when the API caps uploads (the 25 MB
 limits of OpenAI and OpenRouter are handled automatically), `--provider faster-whisper` for local Whisper, `--provider nemotron-asr` for NVIDIA's Nemotron
-streaming models, `--provider cohere-transcribe` for Cohere Transcribe, or another built-in provider id for job-style APIs, `--option key=value` for anything else. To run the same model
+streaming models, `--provider cohere-transcribe` for Cohere Transcribe, `--provider nemotron-transcribe` for a Nemotron Transcribe chat-completions server, or another built-in provider id for job-style APIs, `--option key=value` for anything else. To run the same model
 both ways, give the direct entry its own name (or use `--replace` to switch an existing one).
 
 Editing the file by hand is equally fine:
@@ -204,7 +204,7 @@ built-in examples live in `src/ocular_evals/models/*.toml`, and any TOML file wi
 name = "gpt-4o-mini-transcribe"
 display_name = "GPT-4o mini Transcribe"
 vendor = "OpenAI"
-provider = "openai-compatible"   # openai-compatible | openai-realtime | xai | meta | reson8 | omi | faster-whisper | nemotron-asr | cohere-transcribe
+provider = "openai-compatible"   # openai-compatible | openai-realtime | xai | meta | reson8 | omi | faster-whisper | nemotron-asr | cohere-transcribe | nemotron-transcribe
 model = "gpt-4o-mini-transcribe"
 env = ["OPENAI_API_KEY"]
 href = "https://platform.openai.com/docs/guides/speech-to-text"
@@ -228,6 +228,7 @@ upload = "mp3"                   # OpenAI caps uploads at 25 MB
 | `faster-whisper`    | local CTranslate2 Whisper                                                 | `device`, `compute_type`, `beam_size`, `vad_filter`, `condition_on_previous_text` |
 | `nemotron-asr`      | local Transformers inference for NVIDIA's cache-aware streaming models (`nvidia/nemotron-speech-streaming-en-0.6b`, `nvidia/nemotron-3.5-asr-streaming-0.6b`); tracks are cut at pauses into ≤ 400 s pieces (the model's positional limit) | `lookahead_frames` (right context in 80 ms frames: 0 = 80 ms latency … 13 = 1.12 s, the most accurate; offline output at a lookahead equals streaming at that chunk size), `language` (locale prompt for the multilingual 3.5 model), `device` (`auto`/`cpu`/`mps`/`cuda`), `max_chunk_s`, `search_s` |
 | `cohere-transcribe` | local Transformers inference for Cohere's open-weight `CohereLabs/cohere-transcribe-03-2026` (gated: accept the licence on Hugging Face and log in once); tracks are cut with the model's own energy-based splitter into ≤ 35 s pieces, transcribed in batches and joined | `device` (`auto`/`cpu`/`mps`/`cuda`), `dtype` (`auto` = bfloat16 on GPU, float32 on CPU), `batch_size`, `max_new_tokens`, `punctuation`, `language`, `skip_silence_dbfs` (optional peak-level gate that skips near-silent pieces instead of sending them to the decoder; off by default) |
+| `nemotron-transcribe` | NVIDIA Nemotron Transcribe models served behind an OpenAI-style `POST /v1/chat/completions` (audio as a base64 data URL in the user message); server base URL read from the env var named by `endpoint_env` (default `NEMOTRON_TRANSCRIBE_ENDPOINT`); follows the model's evaluation guide: no system prompt, verbatim single-speaker instruction, thinking off, `temperature=0`, `top_p=1`, `seed=0`, 16,384-token budget, generation-loop cleanup applied once before scoring; a response that stops for `length` is an error | `prompt`, `max_tokens`, `temperature`, `top_p`, `seed`, `loop_cleanup`, `upload` (`flac16k`/`wav16k`/`flac`), `api_key_env` (optional bearer token), `user_agent`, `timeout_s`, `chunk_s`/`search_s` |
 
 Options never contain credentials; keys are read from the environment variables listed in `env`.
 The `xai`, `meta` and `reson8` adapters need only `provider`, `key` and `model` in `models.toml`; their base URLs are built in.
@@ -244,7 +245,7 @@ src/ocular_evals/
   metrics.py      EditCounts, WER / CER alignment
   config.py       model TOML loading
   registry.py     models.toml parsing / `models add`
-  providers/      openai_compatible, openai_realtime, xai, meta, reson8, omi, faster_whisper, nemotron_asr, cohere_transcribe (+ retrying HTTP, audio prep / chunking)
+  providers/      openai_compatible, openai_realtime, xai, meta, reson8, omi, faster_whisper, nemotron_asr, cohere_transcribe, nemotron_transcribe (+ retrying HTTP, audio prep / chunking)
   runner.py       resumable transcription + scoring of a run directory
   report.py       leaderboard HTML
   export.py       board + transcripts JSON for the website (`export`)
@@ -275,7 +276,7 @@ uv run ruff check . && uv run ruff format --check .
   every provider we are asked about; contributions of new entries are welcome.
 - **More providers.** Native adapters for APIs that do not speak the OpenAI transcription protocol
   (streaming / WebSocket vendors, batch job APIs) beyond the current `openai-compatible`, `openai-realtime`,
-  `xai`, `meta`, `reson8`, `omi`, `faster-whisper`, `nemotron-asr` and `cohere-transcribe` backends.
+  `xai`, `meta`, `reson8`, `omi`, `faster-whisper`, `nemotron-asr`, `cohere-transcribe` and `nemotron-transcribe` backends.
 - **More datasets and languages.** Run the same harness over additional Ocular AI conversation sets as they
   are published, including non-English ones.
 - **Latency and cost.** Record time-to-transcript and per-minute pricing next to accuracy so the board can

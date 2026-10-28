@@ -42,7 +42,8 @@
     "qwen3-asr-1-7b",
     "nemotron-3-asr-streaming-en-0-6b",
     "nemotron-3-5-asr-streaming-0-6b",
-    "cohere-transcribe"
+    "cohere-transcribe",
+    "nemotron-3-5-transcribe-30b-a4b"
   ],
   "streaming": [
     "nemotron-3-asr-streaming-en-0-6b",

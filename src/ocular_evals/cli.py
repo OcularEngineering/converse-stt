@@ -496,6 +496,7 @@ def build_parser() -> argparse.ArgumentParser:
             "faster-whisper",
             "nemotron-asr",
             "cohere-transcribe",
+            "nemotron-transcribe",
         ),
         default=None,
     )

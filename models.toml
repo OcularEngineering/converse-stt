@@ -157,6 +157,17 @@ notes = "local (Transformers), lookahead 1.12 s, language en-US"
 lookahead_frames = 13
 language = "en-US"
 
+[nemotron-3-5-transcribe-30b-a4b]
+provider = "nemotron-transcribe"
+model = "nvidia/Nemotron-3.5-Transcribe-30B-A4B"
+vendor = "NVIDIA"
+display_name = "Nemotron 3.5 Transcribe 30B-A4B"
+href = "https://huggingface.co/nvidia/Nemotron-3.5-Transcribe-30B-A4B"
+notes = "served via chat completions; eval-guide settings (verbatim single-speaker prompt, no thinking, temperature 0, loop cleanup)"
+# The server URL lives in .env as NEMOTRON_TRANSCRIBE_ENDPOINT (set endpoint_env to use another name).
+upload = "flac16k"
+user_agent = "brev-transcribe-client/1.0"
+
 [cohere-transcribe]
 provider = "cohere-transcribe"
 model = "CohereLabs/cohere-transcribe-03-2026"
