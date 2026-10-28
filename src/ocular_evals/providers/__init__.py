@@ -8,6 +8,7 @@ from ocular_evals.providers.cohere_transcribe import CohereTranscribeProvider
 from ocular_evals.providers.faster_whisper import FasterWhisperProvider
 from ocular_evals.providers.meta import MetaProvider
 from ocular_evals.providers.nemotron_asr import NemotronAsrProvider
+from ocular_evals.providers.nemotron_transcribe import NemotronTranscribeProvider
 from ocular_evals.providers.omi import OmiProvider
 from ocular_evals.providers.openai_compatible import OpenAICompatibleProvider
 from ocular_evals.providers.openai_realtime import OpenAIRealtimeProvider
@@ -24,6 +25,7 @@ PROVIDERS: dict[str, type[Provider]] = {
     FasterWhisperProvider.key: FasterWhisperProvider,
     NemotronAsrProvider.key: NemotronAsrProvider,
     CohereTranscribeProvider.key: CohereTranscribeProvider,
+    NemotronTranscribeProvider.key: NemotronTranscribeProvider,
 }
 
 
