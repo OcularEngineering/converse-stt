@@ -104,6 +104,7 @@ def test_registry_exposes_every_provider():
         "faster-whisper",
         "nemotron-asr",
         "cohere-transcribe",
+        "qwen3-asr",
         "nemotron-transcribe",
     }
     assert isinstance(create_provider(_config("omi", "omi-general-1")), OmiProvider)
