@@ -1,0 +1,12 @@
+name = "oruk-fourier-2b"
+display_name = "Fourier 2B"
+vendor = "Oruk"
+provider = "qwen3-asr"
+model = "oruk/oruk-fourier-2b"
+env = []
+href = "https://huggingface.co/oruk/oruk-fourier-2b"
+notes = "English, native Transformers, offline research. Model weights are CC BY-NC 4.0. Commercial use or hosted/API serving requires a separate Oruk license."
+
+[options]
+revision = "8c2a8871f1304aa2f634da4fb95e24438c4945b9"
+device = "auto"
